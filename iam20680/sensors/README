@@ -1,0 +1,53 @@
+Android Sensors HAL
+===================
+This Sensors HAL is reusable for Linux as a shared library as well as for
+Android.
+
+
+Porting
+=======
+1. Copy this folder to the target Android source tree
+   e.g. To hardware/invensense/sensors
+
+2. Include Sensors HAL in a list of PRODUCT_PACKAGES
+   e.g. In device/<your>/<product>/device.mk
+
+3. Change access permissions for sysfs entries to allow to access by Sensor HAL
+   e.g. In ueventd.common.rc
+
+   The entries can be found at:
+   (I2C) /sys/devices/*.i2c/i2c-*/*-*/iio:device*
+   (SPI) /sys/devices/*.spi/spi_master/spi*/spi*.*/iio:device*
+
+
+Test applications for Linux
+===========================
+There are 2 test applications for Linux under linux folder.
+
+test-sensors-hal
+================
+This application utilizes Sensors HAL as a shared library to control and
+stream sensor data.
+
+test-sensors-sysfs
+==================
+This application does not require a shared library of HAL but directly accesses
+sysfs entries to control the sensor.
+
+
+License
+=======
+Copyright (C) 2018 InvenSense, Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
