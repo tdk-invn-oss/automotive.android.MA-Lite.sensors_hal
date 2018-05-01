@@ -32,18 +32,21 @@
 #include "hardware/sensors.h"
 
 #define ARRAY_SIZE(array)		(sizeof(array) / sizeof(array[0]))
-#define NS_IN_SEC				1000000000LL
+#define NS_IN_SEC			1000000000LL
 
 struct enabled_sensor {
 	unsigned index;
 	int handle;
 	int rate_hz;
 	int64_t timestamp;
+	int batched_sample_nb;
 };
 
 static std::vector<struct enabled_sensor> enabled_sensor_list;
 static const struct sensor_t *sensors_list;
 static unsigned sensors_nb;
+static int batch_ms;
+static int64_t last_poll_time_ns;
 
 static int64_t get_current_timestamp(void)
 {
@@ -51,6 +54,35 @@ static int64_t get_current_timestamp(void)
 
 	clock_gettime(CLOCK_MONOTONIC, &tp);
 	return  (int64_t)tp.tv_sec * 1000000000LL + (int64_t)tp.tv_nsec;
+}
+
+static void print_batch_info(void)
+{
+	int64_t timestamp = get_current_timestamp();
+	int64_t odr_ns;
+	int odr_hz = 4;
+
+	for (unsigned i = 0; i < enabled_sensor_list.size(); i++) {
+		if (enabled_sensor_list[i].rate_hz > odr_hz)
+			odr_hz = enabled_sensor_list[i].rate_hz;
+	}
+	odr_ns = NS_IN_SEC / odr_hz;
+
+	if (batch_ms != 0) {
+		if (timestamp > (last_poll_time_ns + odr_ns)) {
+			for (unsigned i = 0; i < enabled_sensor_list.size(); i++) {
+				if (enabled_sensor_list[i].batched_sample_nb) {
+					printf("INFO Previous batch count for sensor '%s' is %d\n",
+							sensors_list[enabled_sensor_list[i].index].name,
+							enabled_sensor_list[i].batched_sample_nb);
+				}
+				enabled_sensor_list[i].batched_sample_nb = 0;
+			}
+			printf("INFO New batch duration %" PRId64 " ms\n",
+					(timestamp - last_poll_time_ns) / 1000000);
+		}
+	}
+	last_poll_time_ns = timestamp;
 }
 
 static void print_data(const sensors_event_t* events, int count)
@@ -80,6 +112,7 @@ static void print_data(const sensors_event_t* events, int count)
 		}
 		printf("\n");
 		enabled_sensor_list[t].timestamp = data->timestamp;
+		enabled_sensor_list[t].batched_sample_nb++;
 	}
 }
 
@@ -95,6 +128,7 @@ static void *data_thread(void *arg)
 		if (ret < 0) {
 			printf("data poll error %d!\n", ret);
 		} else {
+			print_batch_info();
 			print_data(data, ret);
 		}
 	} while (ret >= 0);
@@ -110,9 +144,10 @@ static void show_usage(char *argv0)
 		"Usage : %s [OPTIONs] <sensor1,rate1> [<sensor2,rate2> ...]\n"
 		"\n"
 		"Options\n"
-		"\t-l Show sensors list\n"
-		"\t-m Show sensors metadata\n"
-		"\t-p Show sensors data\n"
+		"\t-l :Show sensors list\n"
+		"\t-m :Show sensors metadata\n"
+		"\t-p :Show sensors data\n"
+		"\t-b timeout=<batch_ms> :Batch timeout in ms\n"
 		"\n"
 		"\t<sensorN,rateN>\n"
 		"\t  sensorN : Index of sensor\n"
@@ -145,6 +180,7 @@ static void show_sensor_metadata(const struct sensor_t *sensors_list, unsigned s
 #else
 		printf("    maxDelay     : %d\n", sensors_list[i].maxDelay);
 #endif
+		printf("    fifoMaxEventCount : %d\n", sensors_list[i].fifoMaxEventCount);
 	}
 }
 
@@ -200,8 +236,9 @@ int main(int argc, char *argv[])
 		goto exit_close;
 	}
 
+	batch_ms = 0;
 	printf("Checking commandline options...");
-	while ((opt = getopt(argc, argv, "mlp")) != -1) {
+	while ((opt = getopt(argc, argv, "mlpb:")) != -1) {
 		switch (opt) {
 			case 'm':
 				show_metadata = true;
@@ -211,6 +248,10 @@ int main(int argc, char *argv[])
 				break;
 			case 'p':
 				show_sensor_data = true;
+				break;
+			case 'b':
+				if (sscanf(optarg, "timeout=%d", &batch_ms) != 1)
+					show_usage(argv[0]);
 				break;
 			default:
 				show_usage(argv[0]);
@@ -289,7 +330,7 @@ int main(int argc, char *argv[])
 		int64_t ns = 0;
 		if (it->rate_hz)
 			ns = NS_IN_SEC / it->rate_hz;
-		ret = device->batch(device, it->handle, 0, ns, 0);
+		ret = device->batch(device, it->handle, 0, ns, (int64_t)batch_ms * 1000000);
 		if (ret != 0) {
 			printf(" batch error (%d)!\n", ret);
 			status = EXIT_FAILURE;
@@ -302,7 +343,9 @@ int main(int argc, char *argv[])
 			goto exit_thread_close;
 		}
 		it->timestamp = get_current_timestamp();
+		it->batched_sample_nb = 0;
 	}
+	last_poll_time_ns = get_current_timestamp();
 	printf(" OK!\n");
 	fflush(stdout);
 

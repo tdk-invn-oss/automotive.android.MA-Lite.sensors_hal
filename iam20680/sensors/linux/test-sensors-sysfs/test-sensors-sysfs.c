@@ -31,13 +31,14 @@
 #include <math.h>
 #include "ml_sensor_parsing.h"
 
-#define VERSION_STR             "0.9.0"
+#define VERSION_STR             "0.9.1"
 #define USAGE_NOTE              ""
 
 #define BYTES_PER_SENSOR_PACKET 24
 #define MAX_READ_SIZE           (BYTES_PER_SENSOR_PACKET + 8)
 #define BYTES_PER_SENSOR        8
 #define IIO_BUFFER_LENGTH       32768
+#define NS_IN_SEC               1000000000LL
 
 /* char device for sensor data */
 #define IIO_DEVICE              "/dev/iio:device%lu"
@@ -58,6 +59,7 @@
 #define SYSFS_ACCEL_FIFO_ENABLE "in_accel_enable"
 #define SYSFS_ACCEL_FSR         "in_accel_scale"
 #define SYSFS_ACCEL_RATE        "in_accel_rate"
+#define SYSFS_BATCH_TIMEOUT     "misc_batchmode_timeout"
 
 enum {
     SENSOR_ACCEL = 0,
@@ -92,6 +94,13 @@ static int iio_fd = -1;
 static int64_t accel_prev_ts;
 static int64_t gyro_prev_ts;
 
+/* last poll time used for batch mode */
+static int64_t last_poll_time_ns;
+
+/* batched sample number */
+static int batched_sample_accel_nb;
+static int batched_sample_gyro_nb;
+
 /* commandline options */
 static const struct option options[] = {
     {"help", no_argument, NULL, 'h'},
@@ -99,6 +108,7 @@ static const struct option options[] = {
     {"accel", required_argument, NULL, 'a'},
     {"gyro", required_argument, NULL, 'g'},
     {"convert", no_argument, NULL, 'c'},
+    {"batch", required_argument, NULL, 'b'},
     {0, 0, 0, 0},
 };
 
@@ -108,6 +118,7 @@ static const char *options_descriptions[] = {
     "Turn accelerometer on with ODR (Hz).",
     "Turn gyroscope on with ODR (Hz).",
     "Show data after unit conversion (m/s^2, rad/s)",
+    "Set batch timeout in ms.",
 };
 
 /* get the current time */
@@ -307,6 +318,12 @@ static int set_sensor_fsr(int sensor, int fsr)
     return ret;
 }
 
+/* set batch timeout */
+static int set_sensor_batch_timeout(int ms)
+{
+    return write_sysfs_int(SYSFS_BATCH_TIMEOUT, ms);
+}
+
 /* show usage */
 static void usage(void)
 {
@@ -320,6 +337,41 @@ static void usage(void)
                 options_descriptions[i]);
     printf("Version:\n\t%s\n", VERSION_STR);
     printf("Note:\n\t%s\n\n", USAGE_NOTE);
+}
+
+/* show batch information */
+static void show_batch_info(bool accel_en, bool gyro_en, unsigned long accel_hz, unsigned long gyro_hz, unsigned long batch_ms)
+{
+    int64_t curr_ts = get_current_timestamp();
+    int64_t odr_ns;
+    unsigned long odr_hz = 4;
+
+    if (accel_en && accel_hz > odr_hz)
+        odr_hz = accel_hz;
+    if (gyro_en && gyro_hz > odr_hz)
+        odr_hz = gyro_hz;
+
+    odr_ns = NS_IN_SEC / odr_hz;
+
+    if (batch_ms) {
+        if (curr_ts > (last_poll_time_ns + odr_ns)) {
+            if (accel_en) {
+                if (batched_sample_accel_nb)
+                    printf("INFO Previous batch count for Accel is %d\n",
+                            batched_sample_accel_nb);
+                batched_sample_accel_nb = 0;
+            }
+            if (gyro_en) {
+                if (batched_sample_gyro_nb)
+                    printf("INFO Previous batch count for Gyro  is %d\n",
+                            batched_sample_gyro_nb);
+                batched_sample_gyro_nb = 0;
+            }
+            printf("INFO New batch duration %" PRId64 " ms\n",
+                    (curr_ts - last_poll_time_ns) / 1000000);
+        }
+    }
+    last_poll_time_ns = curr_ts;
 }
 
 /* read sensor data from char device */
@@ -394,6 +446,7 @@ static int read_and_show_data(int *accel_orient, int *gyro_orient, double accel_
                     body_lsb[0], body_lsb[1], body_lsb[2],
                     accel_ts, ts_gap_prev, ts_gap);
         }
+        batched_sample_accel_nb++;
     }
     if (gyro_valid) {
         ts_gap = (float)(curr_ts - gyro_ts)/1000000.f;
@@ -414,6 +467,7 @@ static int read_and_show_data(int *accel_orient, int *gyro_orient, double accel_
                     body_lsb[0], body_lsb[1], body_lsb[2],
                     gyro_ts, ts_gap_prev, ts_gap);
         }
+        batched_sample_gyro_nb++;
     }
 
     return 0;
@@ -470,13 +524,14 @@ int main(int argc, char *argv[])
     unsigned long gyro_hz = 5;
     unsigned long device_no = 0;
     bool convert = false;
+    unsigned long batch_ms = 0;
 
     int accel_fsr = ACCEL_FSR_8G;
     int gyro_fsr = GYRO_FSR_2000DPS;
     double accel_scale = (double)(1<<(accel_fsr + 1)) / 32768.f * 9.80665f; // LSB to m/s^2
     double gyro_scale = (double)(1<<gyro_fsr) * 250.f / 32768.f * M_PI / 180; // LSB to rad/s
 
-    while ((opt = getopt_long(argc, argv, "hd:a:g:c", options, &option_index)) != -1) {
+    while ((opt = getopt_long(argc, argv, "hd:a:g:cb:", options, &option_index)) != -1) {
         switch (opt) {
             case 'a':
                 accel_en = true;
@@ -491,6 +546,9 @@ int main(int argc, char *argv[])
                 break;
             case 'c':
                 convert = true;
+                break;
+            case 'b':
+                batch_ms = (int)strtoul(optarg, NULL, 10);
                 break;
             case 'h':
                 usage();
@@ -564,6 +622,14 @@ int main(int argc, char *argv[])
         return ret;
     }
 
+    /* set batch mode */
+    if (accel_en || gyro_en) {
+        printf(">Set batch timeout\n");
+        ret = set_sensor_batch_timeout(batch_ms);
+        if (ret)
+            return ret;
+    }
+
     /* accel setup */
     if (accel_en) {
         printf(">Set accel FSR\n");
@@ -581,6 +647,7 @@ int main(int argc, char *argv[])
             return ret;
         }
         accel_prev_ts = get_current_timestamp();
+        batched_sample_accel_nb = 0;
     }
 
     /* gyro setup */
@@ -600,7 +667,9 @@ int main(int argc, char *argv[])
             return ret;
         }
         gyro_prev_ts = get_current_timestamp();
+        batched_sample_gyro_nb = 0;
     }
+    last_poll_time_ns = get_current_timestamp();
 
     /* collect sensor data */
     while (1) {
@@ -613,6 +682,8 @@ int main(int argc, char *argv[])
         if (nb > 0) {
             if (fds[0].revents & (POLLIN | POLLPRI)) {
                 fds[0].revents = 0;
+                /* show batch information */
+                show_batch_info(accel_en, gyro_en, accel_hz, gyro_hz, batch_ms);
                 /* read sensor from FIFO and show */
                 read_and_show_data(accel_orient, gyro_orient, accel_scale, gyro_scale, convert);
             }

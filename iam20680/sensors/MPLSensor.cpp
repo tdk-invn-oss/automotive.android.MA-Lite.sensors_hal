@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2017 InvenSense, Inc.
+ * Copyright (C) 2014-2018 InvenSense, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,7 +55,25 @@
 /*******************************************************************************
  * MPLSensor class implementation
  ******************************************************************************/
-
+#ifdef BATCH_MODE_SUPPORT
+static struct sensor_t sRawSensorList[] =
+{
+    {"Invensense Gyroscope Uncalibrated", "Invensense", 1,
+     SENSORS_RAW_GYROSCOPE_HANDLE,
+     SENSOR_TYPE_GYROSCOPE_UNCALIBRATED, 2000.0f * M_PI / 180.0f, 2000.0f * M_PI / (180.0f * 32768.0f), 3.0f, 5000, 0, 512 * 7 / 10 / 6,
+     "android.sensor.gyroscope_uncalibrated", "", 250000, SENSOR_FLAG_CONTINUOUS_MODE, {}},
+    {"Invensense Accelerometer", "Invensense", 1,
+     SENSORS_ACCELERATION_HANDLE,
+     SENSOR_TYPE_ACCELEROMETER, GRAVITY_EARTH * ACCEL_FSR, GRAVITY_EARTH * ACCEL_FSR / 32768.0f, 0.4f, 5000, 0, 512 * 7 / 10 / 6,
+     "android.sensor.accelerometer", "", 250000, SENSOR_FLAG_CONTINUOUS_MODE, {}},
+#ifdef COMPASS_SUPPORT
+    {"Invensense Magnetometer Uncalibrated", "Invensense", 1,
+     SENSORS_RAW_MAGNETIC_FIELD_HANDLE,
+     SENSOR_TYPE_MAGNETIC_FIELD_UNCALIBRATED, 10240.0f, 1.0f, 0.5f, 10000, 0, 0,
+     "android.sensor.magnetic_field_uncalibrated", "", 250000, SENSOR_FLAG_CONTINUOUS_MODE, {}},
+#endif
+};
+#else
 static struct sensor_t sRawSensorList[] =
 {
     {"Invensense Gyroscope Uncalibrated", "Invensense", 1,
@@ -73,6 +91,7 @@ static struct sensor_t sRawSensorList[] =
      "android.sensor.magnetic_field_uncalibrated", "", 250000, SENSOR_FLAG_CONTINUOUS_MODE, {}},
 #endif
 };
+#endif
 
 struct sensor_t *currentSensorList;
 
@@ -103,6 +122,12 @@ MPLSensor::MPLSensor(CompassSensor *compass) :
     mFlushSensorEnabledVector.resize(TotalNumSensors);
 #endif
     memset(mEnabledTime, 0, sizeof(mEnabledTime));
+#ifdef BATCH_MODE_SUPPORT
+    mBatchEnabled = 0;
+    for (int i = 0; i < TotalNumSensors; i++)
+        mBatchTimeouts[i] = 100000000000LL;
+    mBatchTimeoutInMs = 0;
+#endif
 
     /* setup sysfs paths */
     initSysfsAttr();
@@ -120,6 +145,11 @@ MPLSensor::MPLSensor(CompassSensor *compass) :
     LOGI("HAL:InvenSense Sensors HAL version MA-%d.%d.%d%s\n",
          INV_SENSORS_HAL_VERSION_MAJOR, INV_SENSORS_HAL_VERSION_MINOR,
          INV_SENSORS_HAL_VERSION_PATCH, INV_SENSORS_HAL_VERSION_SUFFIX);
+#ifdef BATCH_MODE_SUPPORT
+    LOGI("HAL:Batch mode support : yes\n");
+#else
+    LOGI("HAL:Batch mode support : no\n");
+#endif
 
     /* enable iio */
     enableIIOSysfs();
@@ -161,6 +191,11 @@ MPLSensor::MPLSensor(CompassSensor *compass) :
 
     /* set accel FSR */
     writeSysfs(ACCEL_FSR_SYSFS, mpu.accel_fsr);
+
+#ifdef BATCH_MODE_SUPPORT
+    /* reset batch timeout */
+    setBatchTimeout(0);
+#endif
 }
 
 void MPLSensor::enableIIOSysfs(void)
@@ -348,6 +383,41 @@ void MPLSensor::setMagRate(int64_t period_ns)
         mCompassSensor->setDelay(ID_RM, period_ns);
 }
 
+#ifdef BATCH_MODE_SUPPORT
+void MPLSensor::setBatchTimeout(int64_t timeout_ns)
+{
+    int timeout_ms = (int)(timeout_ns / 1000000LL);
+
+    LOGV_IF(SYSFS_VERBOSE, "HAL:sysfs:echo %d > %s (%" PRId64 ")",
+            timeout_ms, mpu.batchmode_timeout, getTimestamp());
+    write_sysfs_int(mpu.batchmode_timeout, timeout_ms);
+    mBatchTimeoutInMs = timeout_ms;
+}
+
+void MPLSensor::updateBatchTimeout(void)
+{
+    int64_t batchingTimeout = 100000000000LL;
+    int64_t ns = 0;
+
+    if (mBatchEnabled) {
+        for (uint32_t i = 0; i < TotalNumSensors; i++) {
+            if (mEnabled & (1LL << i)) {
+                if (mBatchEnabled & (1LL << i))
+                    ns = mBatchTimeouts[i];
+                else
+                    ns = 0;
+                batchingTimeout = (ns < batchingTimeout) ? ns : batchingTimeout;
+            }
+        }
+    } else {
+        batchingTimeout = 0;
+    }
+    if (mBatchTimeoutInMs != batchingTimeout) {
+        setBatchTimeout(batchingTimeout);
+    }
+}
+#endif
+
 int MPLSensor::enableGyro(int en)
 {
     VFUNC_LOG;
@@ -407,7 +477,10 @@ int MPLSensor::enable(int32_t handle, int en)
         LOGV_IF(PROCESS_VERBOSE, "HAL:can't find handle %d",handle);
         return -EINVAL;
     }
-
+#ifdef BATCH_MODE_SUPPORT
+    if (!en)
+        mBatchEnabled &= ~(1LL << what);
+#endif
     if (mEnabled == 0) {
         // reset buffer
         LOGV_IF(PROCESS_VERBOSE, "HAL:reset parsing buffer (size = %d)", inv_sensor_parsing_get_size());
@@ -457,6 +530,11 @@ int MPLSensor::enable(int32_t handle, int en)
         else
             mEnabledTime[what] = 0;
     }
+
+#ifdef BATCH_MODE_SUPPORT
+    updateBatchTimeout();
+#endif
+
     return err;
 }
 
@@ -969,6 +1047,17 @@ int MPLSensor::batch(int handle, int flags, int64_t period_ns, int64_t timeout)
     if(dryRun == true) {
         return 0;
     }
+
+#ifdef BATCH_MODE_SUPPORT
+    if (timeout == 0) {
+        mBatchEnabled &= ~(1LL << what);
+        mBatchTimeouts[what] = 100000000000LL;
+    } else {
+        mBatchEnabled |= (1LL << what);
+        mBatchTimeouts[what] = timeout;
+    }
+    updateBatchTimeout();
+#endif
 
     switch (what) {
         case RawGyro:

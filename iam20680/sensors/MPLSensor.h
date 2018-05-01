@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2017 InvenSense, Inc.
+ * Copyright (C) 2016-2018 InvenSense, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -137,6 +137,11 @@ private:
     void setAccelRate(int64_t period_ns);
     void setMagRate(int64_t period_ns);
 
+#ifdef BATCH_MODE_SUPPORT
+    void setBatchTimeout(int64_t timeout_ns);
+	void updateBatchTimeout(void);
+#endif
+
     /* data handlers */
     int rawGyroHandler(sensors_event_t *data);
     int accelHandler(sensors_event_t *data);
@@ -164,6 +169,11 @@ private:
     int mPollTime;
     int64_t mDelays[TotalNumSensors];
     int64_t mEnabledTime[TotalNumSensors];
+#ifdef BATCH_MODE_SUPPORT
+    uint64_t mBatchEnabled;
+    int64_t mBatchTimeouts[TotalNumSensors];
+    int64_t mBatchTimeoutInMs;
+#endif
     char mSysfsPath[MAX_SYSFS_NAME_LEN];
     char *sysfs_names_ptr;
 #ifdef __ANDROID__
