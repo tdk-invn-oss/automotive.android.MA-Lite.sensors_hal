@@ -54,49 +54,32 @@
 /*****************************************************************************/
 /* Sensors Enable/Disable Mask
  *****************************************************************************/
-#define MAX_CHIP_ID_LEN                 (20)
+#define MAX_CHIP_ID_LEN             (20)
 
-#define INV_THREE_AXIS_GYRO             (1LL << Gyro)
-#define INV_THREE_AXIS_ACCEL            (1LL << Accelerometer)
-#define INV_THREE_AXIS_COMPASS          (1LL << MagneticField)
+#define INV_THREE_AXIS_GYRO         (1LL << Gyro)
+#define INV_THREE_AXIS_ACCEL        (1LL << Accelerometer)
+#define INV_THREE_AXIS_COMPASS      (1LL << MagneticField)
 
 // data header format used by kernel driver.
-#define DATA_FORMAT_WAKEUP           0x8000
+#define DATA_FORMAT_ACCEL           1
+#define DATA_FORMAT_RAW_GYRO        2
+#define DATA_FORMAT_EMPTY_MARKER    17
+#define DATA_FORMAT_MARKER          18
 
-#define DATA_FORMAT_ACCEL            1
-#define DATA_FORMAT_RAW_GYRO         2
-#define DATA_FORMAT_RAW_COMPASS      3
-#define DATA_FORMAT_ALS              4
-#define DATA_FORMAT_6_AXIS           5
-#define DATA_FORMAT_9_AXIS           6
-#define DATA_FORMAT_PED_QUAT         7
-#define DATA_FORMAT_GEOMAG           8
-#define DATA_FORMAT_PRESSURE         9
-#define DATA_FORMAT_GYRO             10
-#define DATA_FORMAT_COMPASS          11
-#define DATA_FORMAT_STEP_COUNT       12
-#define DATA_FORMAT_PED_STANDALONE   13
-#define DATA_FORMAT_STEP             14
-#define DATA_FORMAT_ACTIVITY         15
-#define DATA_FORMAT_PICKUP           16
-#define DATA_FORMAT_EMPTY_MARKER     17
-#define DATA_FORMAT_MARKER           18
-#define DATA_FORMAT_COMPASS_ACCURACY 19
-#define DATA_FORMAT_ACCEL_ACCURACY   20
-#define DATA_FORMAT_GYRO_ACCURACY    21
-#define DATA_FORMAT_EIS_GYROSCOPE    36
-#define DATA_FORMAT_EIS_AUTHENTICATION    37
-#define DATA_FORMAT_LPQ                   38
+// data size from kernel driver.
+#define DATA_FORMAT_ACCEL_SZ        16
+#define DATA_FORMAT_RAW_GYRO_SZ     16
+#define DATA_FORMAT_EMPTY_MARKER_SZ 8
+#define DATA_FORMAT_MARKER_SZ       8
 
-#define BYTES_PER_SENSOR                8
-#define BYTES_PER_SENSOR_PACKET         24
-#define QUAT_ONLY_LAST_PACKET_OFFSET    16
-#define BYTES_QUAT_DATA                 24
-#define MAX_READ_SIZE                   (BYTES_PER_SENSOR_PACKET + 8)
-#define MAX_SUSPEND_BATCH_PACKET_SIZE   1024
-#define MAX_PACKET_SIZE                 80 //8 * 4 + (2 * 24)
-#define NS_PER_SECOND                   1000000000LL
-#define NS_PER_SECOND_FLOAT             1000000000.f
+// read max size from IIO
+#define MAX_READ_SIZE               2048
+
+// reserved number of events for compass
+#define COMPASS_SEN_EVENT_RESV_SZ   1
+
+#define NS_PER_SECOND               1000000000LL
+#define NS_PER_SECOND_FLOAT         1000000000.f
 
 class MPLSensor: public SensorBase
 {
@@ -116,8 +99,8 @@ public:
     virtual int setDelay(int handle, int64_t period_ns) { (void)handle; (void)period_ns; return 0; }
     virtual void getOrientationMatrix(int8_t *orient) { (void)orient; }
 
-    void buildCompassEvent();
-    void buildMpuEvent();
+    int readCompassEvents(sensors_event_t* s, int count);
+    int readMpuEvents(sensors_event_t* s, int count);
     int getCompassFd() const;
     int getPollTime();
     int populateSensorList(struct sensor_t *list, int len);
@@ -139,7 +122,7 @@ private:
 
 #ifdef BATCH_MODE_SUPPORT
     void setBatchTimeout(int64_t timeout_ns);
-	void updateBatchTimeout(void);
+    void updateBatchTimeout(void);
 #endif
 
     /* data handlers */
@@ -166,6 +149,8 @@ private:
     uint32_t mNumSensors;
     uint64_t mEnabled;
     int mIIOfd;
+    char mIIOReadBuffer[MAX_READ_SIZE];
+    int mIIOReadSize;
     int mPollTime;
     int64_t mDelays[TotalNumSensors];
     int64_t mEnabledTime[TotalNumSensors];

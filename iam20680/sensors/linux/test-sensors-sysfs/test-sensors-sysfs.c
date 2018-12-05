@@ -29,14 +29,11 @@
 #include <time.h>
 #include <getopt.h>
 #include <math.h>
-#include "ml_sensor_parsing.h"
+#include <string.h>
 
-#define VERSION_STR             "0.9.1"
+#define VERSION_STR             "0.9.3"
 #define USAGE_NOTE              ""
 
-#define BYTES_PER_SENSOR_PACKET 24
-#define MAX_READ_SIZE           (BYTES_PER_SENSOR_PACKET + 8)
-#define BYTES_PER_SENSOR        8
 #define IIO_BUFFER_LENGTH       32768
 #define NS_IN_SEC               1000000000LL
 
@@ -101,6 +98,21 @@ static int64_t last_poll_time_ns;
 static int batched_sample_accel_nb;
 static int batched_sample_gyro_nb;
 
+/* for data from driver */
+static char iio_read_buf[2048];
+static int iio_read_size;
+
+/* data header from driver */
+#define ACCEL_HDR                1
+#define GYRO_HDR                 2
+#define EMPTY_MARKER             17
+#define END_MARKER               18
+
+#define ACCEL_DATA_SZ            16
+#define GYRO_DATA_SZ             16
+#define EMPTY_MARKER_SZ          8
+#define END_MARKER_SZ            8
+
 /* commandline options */
 static const struct option options[] = {
     {"help", no_argument, NULL, 'h'},
@@ -155,6 +167,7 @@ static int write_sysfs_int(char *attr, int data)
         }
         fclose(fp);
     }
+    fflush(stdout);
     return ret;
 }
 
@@ -172,6 +185,7 @@ static int get_sensor_orient(int sensor, int *orient)
         attr = SYSFS_GYRO_ORIENT;
     } else {
         printf("invalid sensor type\n");
+        fflush(stdout);
         return -1;
     }
 
@@ -200,6 +214,7 @@ static int get_sensor_orient(int sensor, int *orient)
             orient[3], orient[4], orient[5],
             orient[6], orient[7], orient[8]);
 
+    fflush(stdout);
     return ret;
 }
 
@@ -229,6 +244,7 @@ static int show_chip_name(void)
             printf("chip : %s\n", name);
         fclose(fp);
     }
+    fflush(stdout);
     return ret;
 }
 
@@ -267,6 +283,7 @@ static int setup_iio(void)
     iio_fd = open(iio_dev_path, O_RDONLY);
     if (iio_fd < 0) {
         printf("failed to open %s\n", iio_dev_path);
+        fflush(stdout);
         return -errno;
     }
 
@@ -285,6 +302,7 @@ static int enable_sensor(int sensor, int en)
     } else {
         printf("invalid sensor type\n");
     }
+    fflush(stdout);
     return ret;
 }
 
@@ -300,6 +318,7 @@ static int set_sensor_rate(int sensor, int hz)
     } else {
         printf("invalid sensor type\n");
     }
+    fflush(stdout);
     return ret;
 }
 
@@ -315,6 +334,7 @@ static int set_sensor_fsr(int sensor, int fsr)
     } else {
         printf("invalid sensor type\n");
     }
+    fflush(stdout);
     return ret;
 }
 
@@ -337,6 +357,7 @@ static void usage(void)
                 options_descriptions[i]);
     printf("Version:\n\t%s\n", VERSION_STR);
     printf("Note:\n\t%s\n\n", USAGE_NOTE);
+    fflush(stdout);
 }
 
 /* show batch information */
@@ -372,103 +393,154 @@ static void show_batch_info(bool accel_en, bool gyro_en, unsigned long accel_hz,
         }
     }
     last_poll_time_ns = curr_ts;
+    fflush(stdout);
 }
 
 /* read sensor data from char device */
 static int read_and_show_data(int *accel_orient, int *gyro_orient, double accel_scale, double gyro_scale, bool convert)
 {
     unsigned short header;
-    char rdata[32];
+    char *rdata;
     int sensor, len;
-    char buf[MAX_READ_SIZE];
-    size_t byte = BYTES_PER_SENSOR;
+    int nbytes;
+    int ptr = 0;
     short gyro[3], accel[3];
     short body_lsb[3];
     double body_conv[3];
     int64_t  gyro_ts, accel_ts;
     bool accel_valid = false;
     bool gyro_valid = false;
+    int left_over = 0;
     int64_t curr_ts;
     float ts_gap, ts_gap_prev;
 
     curr_ts = get_current_timestamp();
 
     /* read data from char device */
-    len = read(iio_fd, buf, byte);
+    nbytes = sizeof(iio_read_buf) - iio_read_size;
+    len = read(iio_fd, &iio_read_buf[iio_read_size], nbytes);
+    printf("read len = %d\n", len);
+    if (len < 0) {
+        printf("failed to read iio buffer\n");
+        return len;
+    }
+    if (len == 0) {
+        printf("no data in buffer\n");
+        return 0;
+    }
+
+    iio_read_size += len;
 
     /* parse data */
-    header = inv_sensor_parsing(buf, rdata, len);
-    switch (header) {
-        case END_MARKER:
-            sensor = *((int *) (rdata + 4));
-            printf("HAL:MARKER DETECTED what:%d\n", sensor);
+    while (ptr < iio_read_size) {
+        accel_valid = false;
+        gyro_valid = false;
+        rdata = &iio_read_buf[ptr];
+        header = *(unsigned short*)rdata;
+
+        switch (header) {
+            case END_MARKER:
+                if ((iio_read_size - ptr) < END_MARKER_SZ) {
+                    left_over = iio_read_size - ptr;
+                    break;
+                }
+                sensor = *((int *) (rdata + 4));
+                printf("HAL:MARKER DETECTED what:%d\n", sensor);
+                ptr += END_MARKER_SZ;
+                break;
+            case EMPTY_MARKER:
+                if ((iio_read_size - ptr) < EMPTY_MARKER_SZ) {
+                    left_over = iio_read_size - ptr;
+                    break;
+                }
+                sensor = *((int *) (rdata + 4));
+                printf("HAL:EMPTY MARKER DETECTED what:%d\n", sensor);
+                ptr += EMPTY_MARKER_SZ;
+                break;
+            case GYRO_HDR:
+                if ((iio_read_size - ptr) < GYRO_DATA_SZ) {
+                    left_over = iio_read_size - ptr;
+                    break;
+                }
+                gyro[0] = *((short *) (rdata + 2));
+                gyro[1] = *((short *) (rdata + 4));
+                gyro[2] = *((short *) (rdata + 6));
+                gyro_ts = *((int64_t*) (rdata + 8));
+                gyro_valid = true;
+                ptr += GYRO_DATA_SZ;
+                break;
+            case ACCEL_HDR:
+                if ((iio_read_size - ptr) < ACCEL_DATA_SZ) {
+                    left_over = iio_read_size - ptr;
+                    break;
+                }
+                accel[0] = *((short *) (rdata + 2));
+                accel[1] = *((short *) (rdata + 4));
+                accel[2] = *((short *) (rdata + 6));
+                accel_ts = *((int64_t*) (rdata + 8));
+                accel_valid = true;
+                ptr += ACCEL_DATA_SZ;
+                break;
+            default:
+                ptr++;
+                break;
+        }
+
+        /* show data */
+        if (accel_valid) {
+            ts_gap = (float)(curr_ts - accel_ts)/1000000.f;
+            ts_gap_prev = (float)(accel_ts - accel_prev_ts)/1000000.f;
+            accel_prev_ts = accel_ts;
+            body_lsb[0] = accel[0] * accel_orient[0] + accel[1] * accel_orient[1] + accel[2] * accel_orient[2];
+            body_lsb[1] = accel[0] * accel_orient[3] + accel[1] * accel_orient[4] + accel[2] * accel_orient[5];
+            body_lsb[2] = accel[0] * accel_orient[6] + accel[1] * accel_orient[7] + accel[2] * accel_orient[8];
+            if (convert) {
+                body_conv[0] = (double)body_lsb[0] * accel_scale;
+                body_conv[1] = (double)body_lsb[1] * accel_scale;
+                body_conv[2] = (double)body_lsb[2] * accel_scale;
+                printf("Accel body (m/s^2), %+13f, %+13f, %+13f, %20" PRId64 ", %8.3f, %8.3f\n",
+                        body_conv[0], body_conv[1], body_conv[2],
+                        accel_ts, ts_gap_prev, ts_gap);
+            } else {
+                printf("Accel body (LSB)  , %+6d, %+6d, %+6d, %20" PRId64 ", %8.3f, %8.3f\n",
+                        body_lsb[0], body_lsb[1], body_lsb[2],
+                        accel_ts, ts_gap_prev, ts_gap);
+            }
+            batched_sample_accel_nb++;
+        }
+        if (gyro_valid) {
+            ts_gap = (float)(curr_ts - gyro_ts)/1000000.f;
+            ts_gap_prev = (float)(gyro_ts - gyro_prev_ts)/1000000.f;
+            gyro_prev_ts = gyro_ts;
+            body_lsb[0] = gyro[0] * gyro_orient[0] + gyro[1] * gyro_orient[1] + gyro[2] * gyro_orient[2];
+            body_lsb[1] = gyro[0] * gyro_orient[3] + gyro[1] * gyro_orient[4] + gyro[2] * gyro_orient[5];
+            body_lsb[2] = gyro[0] * gyro_orient[6] + gyro[1] * gyro_orient[7] + gyro[2] * gyro_orient[8];
+            if (convert) {
+                body_conv[0] = (double)body_lsb[0] * gyro_scale;
+                body_conv[1] = (double)body_lsb[1] * gyro_scale;
+                body_conv[2] = (double)body_lsb[2] * gyro_scale;
+                printf("Gyro  body (rad/s), %+13f, %+13f, %+13f, %20" PRId64 ", %8.3f, %8.3f\n",
+                        body_conv[0], body_conv[1], body_conv[2],
+                        gyro_ts, ts_gap_prev, ts_gap);
+            } else {
+                printf("Gyro  body (LSB)  , %+6d, %+6d, %+6d, %20" PRId64 ", %8.3f, %8.3f\n",
+                        body_lsb[0], body_lsb[1], body_lsb[2],
+                        gyro_ts, ts_gap_prev, ts_gap);
+            }
+            batched_sample_gyro_nb++;
+        }
+        if (left_over) {
             break;
-        case EMPTY_MARKER:
-            sensor = *((int *) (rdata + 4));
-            printf("HAL:EMPTY MARKER DETECTED what:%d\n", sensor);
-            break;
-        case GYRO_HDR:
-            gyro[0] = *((short *) (rdata + 2));
-            gyro[1] = *((short *) (rdata + 4));
-            gyro[2] = *((short *) (rdata + 6));
-            gyro_ts = *((int64_t*) (rdata + 8));
-            gyro_valid = true;
-            break;
-        case ACCEL_HDR:
-            accel[0] = *((short *) (rdata + 2));
-            accel[1] = *((short *) (rdata + 4));
-            accel[2] = *((short *) (rdata + 6));
-            accel_ts = *((int64_t*) (rdata + 8));
-            accel_valid = true;
-            break;
-        default:
-            // do nothing
-            break;
+        }
     }
 
-    /* show data */
-    if (accel_valid) {
-        ts_gap = (float)(curr_ts - accel_ts)/1000000.f;
-        ts_gap_prev = (float)(accel_ts - accel_prev_ts)/1000000.f;
-        accel_prev_ts = accel_ts;
-        body_lsb[0] = accel[0] * accel_orient[0] + accel[1] * accel_orient[1] + accel[2] * accel_orient[2];
-        body_lsb[1] = accel[0] * accel_orient[3] + accel[1] * accel_orient[4] + accel[2] * accel_orient[5];
-        body_lsb[2] = accel[0] * accel_orient[6] + accel[1] * accel_orient[7] + accel[2] * accel_orient[8];
-        if (convert) {
-            body_conv[0] = (double)body_lsb[0] * accel_scale;
-            body_conv[1] = (double)body_lsb[1] * accel_scale;
-            body_conv[2] = (double)body_lsb[2] * accel_scale;
-            printf("Accel body (m/s^2), %+13f, %+13f, %+13f, %20" PRId64 ", %8.3f, %8.3f\n",
-                    body_conv[0], body_conv[1], body_conv[2],
-                    accel_ts, ts_gap_prev, ts_gap);
-        } else {
-            printf("Accel body (LSB)  , %+6d, %+6d, %+6d, %20" PRId64 ", %8.3f, %8.3f\n",
-                    body_lsb[0], body_lsb[1], body_lsb[2],
-                    accel_ts, ts_gap_prev, ts_gap);
-        }
-        batched_sample_accel_nb++;
+    if (left_over > 0) {
+        memmove(iio_read_buf, &iio_read_buf[ptr], left_over);
+        iio_read_size = left_over;
+    } else {
+        iio_read_size = 0;
     }
-    if (gyro_valid) {
-        ts_gap = (float)(curr_ts - gyro_ts)/1000000.f;
-        ts_gap_prev = (float)(gyro_ts - gyro_prev_ts)/1000000.f;
-        gyro_prev_ts = gyro_ts;
-        body_lsb[0] = gyro[0] * gyro_orient[0] + gyro[1] * gyro_orient[1] + gyro[2] * gyro_orient[2];
-        body_lsb[1] = gyro[0] * gyro_orient[3] + gyro[1] * gyro_orient[4] + gyro[2] * gyro_orient[5];
-        body_lsb[2] = gyro[0] * gyro_orient[6] + gyro[1] * gyro_orient[7] + gyro[2] * gyro_orient[8];
-        if (convert) {
-            body_conv[0] = (double)body_lsb[0] * gyro_scale;
-            body_conv[1] = (double)body_lsb[1] * gyro_scale;
-            body_conv[2] = (double)body_lsb[2] * gyro_scale;
-            printf("Gyro  body (rad/s), %+13f, %+13f, %+13f, %20" PRId64 ", %8.3f, %8.3f\n",
-                    body_conv[0], body_conv[1], body_conv[2],
-                    gyro_ts, ts_gap_prev, ts_gap);
-        } else {
-            printf("Gyro  body (LSB)  , %+6d, %+6d, %+6d, %20" PRId64 ", %8.3f, %8.3f\n",
-                    body_lsb[0], body_lsb[1], body_lsb[2],
-                    gyro_ts, ts_gap_prev, ts_gap);
-        }
-        batched_sample_gyro_nb++;
-    }
+    fflush(stdout);
 
     return 0;
 }
@@ -485,12 +557,14 @@ static void sig_handler(int s)
     ret = enable_sensor(SENSOR_ACCEL, 0);
     if (ret) {
         printf("failed to enable accel\n");
+        fflush(stdout);
         return;
     }
     printf("Disable gyro\n");
     ret = enable_sensor(SENSOR_GYRO, 0);
     if (ret) {
         printf("failed to enable gyro\n");
+        fflush(stdout);
         return;
     }
 
@@ -498,6 +572,7 @@ static void sig_handler(int s)
     ret = write_sysfs_int(SYSFS_CHIP_ENABLE, 0);
     if (ret) {
         printf("failed to disable buffer\n");
+        fflush(stdout);
         return;
     }
 
@@ -507,6 +582,7 @@ static void sig_handler(int s)
         iio_fd = -1;
     }
 
+    fflush(stdout);
     exit(1);
 }
 
@@ -570,15 +646,18 @@ int main(int argc, char *argv[])
     ret = snprintf(iio_sysfs_path, sizeof(iio_sysfs_path), SYSFS_PATH, device_no);
     if (ret < 0 || ret >= (int)sizeof(iio_sysfs_path)) {
         printf("error %d cannot set iio sysfs path\n", ret);
+        fflush(stdout);
         return -errno;
     }
     ret = snprintf(iio_dev_path, sizeof(iio_dev_path), IIO_DEVICE, device_no);
     if (ret < 0 || ret >= (int)sizeof(iio_dev_path)) {
         printf("error %d cannot set iio dev path\n", ret);
+        fflush(stdout);
         return -errno;
     }
 
     printf(">Start\n");
+    fflush(stdout);
 
     /* show chip name */
     ret = show_chip_name();
@@ -588,43 +667,54 @@ int main(int argc, char *argv[])
 
     /* get sensor orientation */
     printf(">Get accel orientation\n");
+    fflush(stdout);
     ret = get_sensor_orient(SENSOR_ACCEL, accel_orient);
     if (ret) {
         printf("failed to get accel orientation\n");
+        fflush(stdout);
         return ret;
     }
     printf(">Get gyro orientation\n");
+    fflush(stdout);
     ret = get_sensor_orient(SENSOR_GYRO, gyro_orient);
     if (ret) {
         printf("failed to get gyro orientation\n");
+        fflush(stdout);
         return ret;
     }
 
     /* setup iio */
     printf(">Set up IIO\n");
+    fflush(stdout);
     ret = setup_iio();
     if (ret) {
         printf("failed to set up iio\n");
+        fflush(stdout);
         return ret;
     }
 
     /* make sure all sensors are disabled */
     printf(">Disable accel\n");
+    fflush(stdout);
     ret = enable_sensor(SENSOR_ACCEL, 0);
     if (ret) {
         printf("failed to enable accel\n");
+        fflush(stdout);
         return ret;
     }
     printf(">Disable gyro\n");
+    fflush(stdout);
     ret = enable_sensor(SENSOR_GYRO, 0);
     if (ret) {
         printf("failed to enable gyro\n");
+        fflush(stdout);
         return ret;
     }
 
     /* set batch mode */
     if (accel_en || gyro_en) {
         printf(">Set batch timeout\n");
+        fflush(stdout);
         ret = set_sensor_batch_timeout(batch_ms);
         if (ret)
             return ret;
@@ -633,17 +723,21 @@ int main(int argc, char *argv[])
     /* accel setup */
     if (accel_en) {
         printf(">Set accel FSR\n");
+        fflush(stdout);
         ret = set_sensor_fsr(SENSOR_ACCEL, accel_fsr);
         if (ret)
             return ret;
         printf(">Set accel rate\n");
+        fflush(stdout);
         ret = set_sensor_rate(SENSOR_ACCEL, accel_hz);
         if (ret)
             return ret;
         printf(">Enable accel\n");
+        fflush(stdout);
         ret = enable_sensor(SENSOR_ACCEL, 1);
         if (ret) {
             printf("failed to enable accel\n");
+            fflush(stdout);
             return ret;
         }
         accel_prev_ts = get_current_timestamp();
@@ -653,17 +747,21 @@ int main(int argc, char *argv[])
     /* gyro setup */
     if (gyro_en) {
         printf(">Set gyro FSR\n");
+        fflush(stdout);
         ret = set_sensor_fsr(SENSOR_GYRO, gyro_fsr);
         if (ret)
             return ret;
         printf(">Set gyro rate\n");
+        fflush(stdout);
         ret = set_sensor_rate(SENSOR_GYRO, gyro_hz);
         if (ret)
             return ret;
         printf(">Enable gyro\n");
+        fflush(stdout);
         ret = enable_sensor(SENSOR_GYRO, 1);
         if (ret) {
             printf("failed to enable gyro\n");
+            fflush(stdout);
             return ret;
         }
         gyro_prev_ts = get_current_timestamp();

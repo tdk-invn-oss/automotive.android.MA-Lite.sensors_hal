@@ -172,24 +172,16 @@ int sensors_poll_context_t::pollEvents(sensors_event_t *data, int count)
                 if (mPollFds[i].revents & (POLLIN | POLLPRI)) {
                     nb = 0;
                     if (i == mpl) {
-                        ((MPLSensor*) mSensor)->buildMpuEvent();
+                        nb = ((MPLSensor*) mSensor)->readMpuEvents(data, count);
                         mPollFds[i].revents = 0;
                     } else if (i == compass) {
-                        ((MPLSensor*) mSensor)->buildCompassEvent();
+                        nb = ((MPLSensor*) mSensor)->readCompassEvents(data, count);
                         mPollFds[i].revents = 0;
                     }
-                    if(nb == 0) {
-                        nb = ((MPLSensor*) mSensor)->readEvents(data, count);
-                        LOGI_IF(0, "sensors_mpl:readEvents() - "
-                                "i=%d, nb=%d, count=%d, nbEvents=%d, "
-                                "data->timestamp=%" PRId64", data->data[0]=%f,",
-                                i, nb, count, nbEvents, data->timestamp,
-                                data->data[0]);
-                        if (nb > 0) {
-                            count -= nb;
-                            nbEvents += nb;
-                            data += nb;
-                        }
+                    if (nb > 0) {
+                        count -= nb;
+                        nbEvents += nb;
+                        data += nb;
                     }
                 }
             }

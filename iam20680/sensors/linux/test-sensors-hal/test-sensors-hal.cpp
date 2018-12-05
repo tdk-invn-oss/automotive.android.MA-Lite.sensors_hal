@@ -92,6 +92,7 @@ static void print_data(const sensors_event_t* events, int count)
 
 	timestamp = get_current_timestamp();
 
+	printf("read count = %d\n", count);
 	for (int i = 0; i < count; i++) {
 		data = &events[i];
 		unsigned t;

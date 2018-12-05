@@ -7,7 +7,6 @@ CFLAGS += -Wall -Wextra -Werror
 
 # source C files
 SRC_C_FILES += test-sensors-sysfs.c
-SRC_C_FILES += $(HAL_SRC_DIR)/tools/ml_sensor_parsing.c
 
 # include dirs
 CFLAGS += -I$(HAL_SRC_DIR)/tools

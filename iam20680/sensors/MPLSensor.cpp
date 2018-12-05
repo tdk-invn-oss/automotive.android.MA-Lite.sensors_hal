@@ -45,7 +45,6 @@
 
 #include "log.h"
 #include "ml_sysfs_helper.h"
-#include "ml_sensor_parsing.h"
 
 #define MAX_SYSFS_ATTRB (sizeof(struct sysfs_attrbs) / sizeof(char*))
 
@@ -97,6 +96,7 @@ struct sensor_t *currentSensorList;
 
 MPLSensor::MPLSensor(CompassSensor *compass) :
     mEnabled(0),
+    mIIOReadSize(0),
     mPollTime(-1),
     mGyroSensorPrevTimestamp(0),
     mAccelSensorPrevTimestamp(0),
@@ -483,8 +483,7 @@ int MPLSensor::enable(int32_t handle, int en)
 #endif
     if (mEnabled == 0) {
         // reset buffer
-        LOGV_IF(PROCESS_VERBOSE, "HAL:reset parsing buffer (size = %d)", inv_sensor_parsing_get_size());
-        inv_sensor_parsing_reset();
+        mIIOReadSize = 0;
     }
 
     LOGV_IF(PROCESS_VERBOSE, "HAL:handle = %d en = %d", handle, en);
@@ -771,74 +770,167 @@ int MPLSensor::readEvents(sensors_event_t* data, int count)
     return numEventReceived;
 }
 
-// collect data for MPL (but NOT sensor service currently), from driver layer
-void MPLSensor::buildMpuEvent(void)
+int MPLSensor::readMpuEvents(sensors_event_t* s, int count)
 {
     VHANDLER_LOG;
 
     unsigned short header;
-    char rdata[32];
+    char *rdata;
     int rsize;
     int sensor;
-    char outBuffer[MAX_READ_SIZE];
-    size_t nbyte = BYTES_PER_SENSOR;
+    int ptr = 0;
+    int numEventReceived = 0;
+    int left_over = 0;
+    bool data_found;
 
     if (mEnabled == 0) {
         /* no sensor is enabled. read out all leftover */
-        rsize = read(mIIOfd, outBuffer, MAX_READ_SIZE);
-        inv_sensor_parsing_reset(); // reset buffer
-        return;
+        rsize = read(mIIOfd, mIIOReadBuffer, sizeof(mIIOReadBuffer));
+        mIIOReadSize = 0;
+        return 0;
     }
 
-    rsize = read(mIIOfd, outBuffer, nbyte);
-    header = inv_sensor_parsing(outBuffer, rdata, rsize);
+    if (mCompassSensor)
+        count -= COMPASS_SEN_EVENT_RESV_SZ;
 
-    switch (header) {
-        case DATA_FORMAT_MARKER:
-            sensor = *((int *) (rdata + 4));
-            mFlushSensorEnabledVector.push_back(sensor);
-            LOGV_IF(INPUT_DATA, "HAL:MARKER DETECTED what:%d", sensor);
-            break;
-        case DATA_FORMAT_EMPTY_MARKER:
-            sensor = *((int *) (rdata + 4));
-            mFlushSensorEnabledVector.push_back(sensor);
-            LOGV_IF(INPUT_DATA, "HAL:EMPTY MARKER DETECTED what:%d", sensor);
-            break;
-        case DATA_FORMAT_RAW_GYRO:
-            mCachedGyroData[0] = *((short *) (rdata + 2));
-            mCachedGyroData[1] = *((short *) (rdata + 4));
-            mCachedGyroData[2] = *((short *) (rdata + 6));
-            mGyroSensorTimestamp = *((long long*) (rdata + 8));
-            LOGV_IF(INPUT_DATA, "HAL:RAW GYRO DETECTED:0x%x : %d %d %d -- %" PRId64,
-                    header,
-                    mCachedGyroData[0], mCachedGyroData[1], mCachedGyroData[2],
-                    mGyroSensorTimestamp);
-            break;
-        case DATA_FORMAT_ACCEL:
-            mCachedAccelData[0] = *((short *) (rdata + 2));
-            mCachedAccelData[1] = *((short *) (rdata + 4));
-            mCachedAccelData[2] = *((short *) (rdata + 6));
-            mAccelSensorTimestamp = *((long long*) (rdata + 8));
-            LOGV_IF(INPUT_DATA, "HAL:ACCEL DETECTED:0x%x : %d %d %d -- %" PRId64,
-                    header,
-                    mCachedAccelData[0], mCachedAccelData[1], mCachedAccelData[2],
-                    mAccelSensorTimestamp);
-            break;
-        default:
-            /* set timestamp 0 for all sensors not to send any data
-             * to framework by checking timestamp in handlers */
-            mGyroSensorTimestamp = 0;
-            mAccelSensorTimestamp = 0;
-            break;
+    /* read as much data as possible allowed with either
+     * smaller, the buffer from upper layer or local buffer */
+    int nbytes = sizeof(mIIOReadBuffer) - mIIOReadSize;
+    /* assume that gyro and accel data packet size are the same
+     * and larger than marker packet */
+    int packet_size = DATA_FORMAT_RAW_GYRO_SZ;
+    if (nbytes > count * packet_size) {
+        nbytes = count * packet_size;
     }
+    rsize = read(mIIOfd, &mIIOReadBuffer[mIIOReadSize], nbytes);
+    LOGV_IF(PROCESS_VERBOSE, "HAL: nbytes=%d rsize=%d", nbytes, rsize);
+    if (rsize < 0) {
+        LOGE("HAL:failed to read IIO.  nbytes=%d rsize=%d", nbytes, rsize);
+        return 0;
+    }
+    if (rsize == 0) {
+        LOGI("HAL:no data from IIO.");
+        return 0;
+    }
+
+    mIIOReadSize += rsize;
+
+    while (ptr < mIIOReadSize) {
+        rdata = &mIIOReadBuffer[ptr];
+        header = *(unsigned short*)rdata;
+        data_found = false;
+        switch (header) {
+            case DATA_FORMAT_MARKER:
+                if ((mIIOReadSize - ptr) < DATA_FORMAT_MARKER_SZ) {
+                    left_over = mIIOReadSize - ptr;
+                    break;
+                }
+                sensor = *((int *) (rdata + 4));
+                mFlushSensorEnabledVector.push_back(sensor);
+                LOGV_IF(INPUT_DATA, "HAL:MARKER DETECTED what:%d", sensor);
+                ptr += DATA_FORMAT_MARKER_SZ;
+                data_found = true;
+                break;
+            case DATA_FORMAT_EMPTY_MARKER:
+                if ((mIIOReadSize - ptr) < DATA_FORMAT_EMPTY_MARKER_SZ) {
+                    left_over = mIIOReadSize - ptr;
+                    break;
+                }
+                sensor = *((int *) (rdata + 4));
+                mFlushSensorEnabledVector.push_back(sensor);
+                LOGV_IF(INPUT_DATA, "HAL:EMPTY MARKER DETECTED what:%d", sensor);
+                ptr += DATA_FORMAT_EMPTY_MARKER_SZ;
+                data_found = true;
+                break;
+            case DATA_FORMAT_RAW_GYRO:
+                if ((mIIOReadSize - ptr) < DATA_FORMAT_RAW_GYRO_SZ) {
+                    left_over = mIIOReadSize - ptr;
+                    break;
+                }
+                mCachedGyroData[0] = *((short *) (rdata + 2));
+                mCachedGyroData[1] = *((short *) (rdata + 4));
+                mCachedGyroData[2] = *((short *) (rdata + 6));
+                mGyroSensorTimestamp = *((long long*) (rdata + 8));
+                LOGV_IF(INPUT_DATA, "HAL:RAW GYRO DETECTED:0x%x : %d %d %d -- %" PRId64,
+                        header,
+                        mCachedGyroData[0], mCachedGyroData[1], mCachedGyroData[2],
+                        mGyroSensorTimestamp);
+                ptr += DATA_FORMAT_RAW_GYRO_SZ;
+                data_found = true;
+                break;
+            case DATA_FORMAT_ACCEL:
+                if ((mIIOReadSize - ptr) < DATA_FORMAT_ACCEL_SZ) {
+                    left_over = mIIOReadSize - ptr;
+                    break;
+                }
+                mCachedAccelData[0] = *((short *) (rdata + 2));
+                mCachedAccelData[1] = *((short *) (rdata + 4));
+                mCachedAccelData[2] = *((short *) (rdata + 6));
+                mAccelSensorTimestamp = *((long long*) (rdata + 8));
+                LOGV_IF(INPUT_DATA, "HAL:ACCEL DETECTED:0x%x : %d %d %d -- %" PRId64,
+                        header,
+                        mCachedAccelData[0], mCachedAccelData[1], mCachedAccelData[2],
+                        mAccelSensorTimestamp);
+                ptr += DATA_FORMAT_ACCEL_SZ;
+                data_found = true;
+                break;
+            default:
+                LOGW("HAL:no header.");
+                ptr++;
+                data_found = false;
+                break;
+        }
+
+        if (data_found) {
+            int num = readEvents(&s[numEventReceived], count);
+            if (num > 0) {
+                count -= num;
+                numEventReceived += num;
+                if (count == 0)
+                    break;
+                if (count < 0) {
+                    LOGW("HAL:sensor_event_t buffer overflow");
+                    break;
+                }
+            }
+        }
+        if (left_over) {
+            break;
+        }
+    }
+
+    if (left_over > 0) {
+        LOGV_IF(PROCESS_VERBOSE, "HAL: leftover mIIOReadSize=%d ptr=%d",
+                mIIOReadSize, ptr);
+        memmove(mIIOReadBuffer, &mIIOReadBuffer[ptr], left_over);
+        mIIOReadSize = left_over;
+    } else {
+        mIIOReadSize = 0;
+    }
+
+    return numEventReceived;
 }
 
-void MPLSensor::buildCompassEvent(void)
+int MPLSensor::readCompassEvents(sensors_event_t* s, int count)
 {
     VHANDLER_LOG;
 
-    if (mCompassSensor)
+    int numEventReceived = 0;
+
+    if (count > COMPASS_SEN_EVENT_RESV_SZ)
+        count = COMPASS_SEN_EVENT_RESV_SZ;
+
+    if (mCompassSensor) {
         mCompassSensor->readSample(mCachedCompassData, &mCompassTimestamp, 3);
+        int num = readEvents(&s[numEventReceived], count);
+        if (num > 0) {
+            count -= num;
+            numEventReceived += num;
+            if (count < 0)
+                LOGW("HAL:sensor_event_t buffer overflow");
+        }
+    }
+    return numEventReceived;
 }
 
 int MPLSensor::getFd(void) const
