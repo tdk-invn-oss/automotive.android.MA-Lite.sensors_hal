@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018-2018 InvenSense, Inc.
+ * Copyright (C) 2018-2019 InvenSense, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -92,7 +92,7 @@ static void print_data(const sensors_event_t* events, int count)
 
 	timestamp = get_current_timestamp();
 
-	printf("read count = %d\n", count);
+	//printf("read count = %d\n", count);
 	for (int i = 0; i < count; i++) {
 		data = &events[i];
 		unsigned t;

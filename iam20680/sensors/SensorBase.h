@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2017 InvenSense, Inc.
+ * Copyright (C) 2014-2019 InvenSense, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 #include <errno.h>
 #include <sys/cdefs.h>
 #include <sys/types.h>
-#include "log.h"
+#include "Log.h"
 
 #define FUNC_LOG \
             LOGV("%s", __PRETTY_FUNCTION__)

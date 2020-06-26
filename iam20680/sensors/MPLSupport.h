@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2017 InvenSense, Inc.
+ * Copyright (C) 2014-2019 InvenSense, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,15 +25,15 @@ int enable_sysfs_sensor(int fd, int en);
 int write_attribute_sensor(int fd, int data);
 int write_attribute_sensor(int fd, char* data);
 int write_attribute_sensor_continuous(int fd, int data);
-int read_sysfs_int64(char*, int64_t*);
-int read_sysfs_int(char*, int*);
-int read_sysfs_int_array(char*, int*);
-int write_sysfs_int(char*, int);
-int write_sysfs_intint(char*, long long);
+int read_sysfs_int64(const char*, int64_t*);
+int read_sysfs_int(const char*, int*);
+int read_sysfs_int_array(const char*, int*);
+int write_sysfs_int(const char*, int);
+int write_sysfs_intint(const char*, long long);
 int fill_dev_full_name_by_prefix(const char* dev_prefix,
                                  char* dev_full_name, int len);
-void dump_dmp_img();
-int read_sysfs_dir(bool fileMode, char *sysfs_path);
+
+int read_sysfs_dir(bool fileMode, const char *sysfs_path);
 
 void convert_int_to_hex_char(int* quat, unsigned char* hex, int numElement);
 int inv_float_to_q16(float *fdata, int *ldata);

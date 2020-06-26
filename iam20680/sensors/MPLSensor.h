@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2018 InvenSense, Inc.
+ * Copyright (C) 2016-2019 InvenSense, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,13 +23,8 @@
 #include <sys/types.h>
 #include <poll.h>
 #include <time.h>
-#ifdef __ANDROID__
-#include <utils/Vector.h>
-#include <utils/String8.h>
-#else
 #include <vector>
 #include <string>
-#endif
 
 #include "InvnSensors.h"
 #include "SensorBase.h"
@@ -67,15 +62,15 @@
 #define DATA_FORMAT_MARKER          18
 
 // data size from kernel driver.
-#define DATA_FORMAT_ACCEL_SZ        16
-#define DATA_FORMAT_RAW_GYRO_SZ     16
+#define DATA_FORMAT_ACCEL_SZ        24
+#define DATA_FORMAT_RAW_GYRO_SZ     24
 #define DATA_FORMAT_EMPTY_MARKER_SZ 8
 #define DATA_FORMAT_MARKER_SZ       8
 
 // read max size from IIO
 #define MAX_READ_SIZE               2048
 
-// reserved number of events for compass
+// reserved the number of events for compass
 #define COMPASS_SEN_EVENT_RESV_SZ   1
 
 #define NS_PER_SECOND               1000000000LL
@@ -131,14 +126,9 @@ private:
     int rawCompassHandler(sensors_event_t *data);
     int metaHandler(sensors_event_t *data, int flags); // for flush complete
 
-#ifdef __ANDROID__
-    void getHandle(int32_t handle, int &what, android::String8 &sname);
-#else
     void getHandle(int32_t handle, int &what, std::string &sname);
-#endif
     void setDeviceProperties();
     void getSensorsOrientation(void);
-    void writeSysfs(int data, char *sysfs);
     void writeRateSysfs(int64_t period_ns, char *sysfs_rate);
     typedef int (*get_sensor_data_func)(float *values, int8_t *accuracy, int64_t *timestamp, int mode);
 
@@ -161,11 +151,7 @@ private:
 #endif
     char mSysfsPath[MAX_SYSFS_NAME_LEN];
     char *sysfs_names_ptr;
-#ifdef __ANDROID__
-    android::Vector<int> mFlushSensorEnabledVector;
-#else
     std::vector<int> mFlushSensorEnabledVector;
-#endif
     sensors_event_t mPendingEvents[TotalNumSensors];
     hfunc_t mHandlers[TotalNumSensors];
 
@@ -186,6 +172,10 @@ private:
     int64_t mGyroSensorPrevTimestamp;
     int64_t mAccelSensorPrevTimestamp;
     int64_t mCompassPrevTimestamp;
+
+    /* fsr */
+    int mGyroFsrDps;
+    int mAccelFsrGee;
 
     /* sysfs entries */
     struct sysfs_attrbs {
@@ -218,6 +208,7 @@ private:
        char *in_gyro_z_offset;
        char *batchmode_timeout;
        char *flush_batch;
+       char *high_res_mode;
    } mpu;
 };
 

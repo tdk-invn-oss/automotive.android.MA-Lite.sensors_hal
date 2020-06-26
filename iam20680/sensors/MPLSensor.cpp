@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2018 InvenSense, Inc.
+ * Copyright (C) 2014-2020 InvenSense, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,25 +31,47 @@
 #include <sys/syscall.h>
 #include <dlfcn.h>
 #include <pthread.h>
-#ifdef __ANDROID__
-#include <utils/Vector.h>
-#include <utils/String8.h>
-#else
 #include <vector>
 #include <string>
-#endif
 #include <string.h>
 
 #include "MPLSensor.h"
 #include "MPLSupport.h"
 
-#include "log.h"
+#include "Log.h"
 #include "ml_sysfs_helper.h"
 
 #define MAX_SYSFS_ATTRB (sizeof(struct sysfs_attrbs) / sizeof(char*))
 
+/* Accel enhanced FSR support */
+#ifdef ACCEL_ENHANCED_FSR_SUPPORT
+#define ACCEL_FSR       32.0f   // 32g
+#define ACCEL_FSR_SYSFS 4       // 0:2g, 1:4g, 2:8g, 3:16g, 4:32g
+#else
 #define ACCEL_FSR       8.0f    // 8g
-#define ACCEL_FSR_SYSFS 2       // 0:2g, 1:4g, 2:8g, 3:16g
+#define ACCEL_FSR_SYSFS 2       // 0:2g, 1:4g, 2:8g, 3:16g, 4:32g
+#endif
+
+/* Gyro enhanced FSR support */
+#ifdef ACCEL_ENHANCED_FSR_SUPPORT
+#define GYRO_FSR        4000.0f // 4000dps
+#define GYRO_FSR_SYSFS  4       // 0:250dps, 1:500dps, 2:1000dps, 3:2000dps, 4:4000dps
+#else
+#define GYRO_FSR        2000.0f // 2000dps
+#define GYRO_FSR_SYSFS  3       // 0:250dps, 1:500dps, 2:1000dps, 3:2000dps, 4:4000dps
+#endif
+
+#ifdef ODR_SMPLRT_DIV
+#define MAX_DELAY_US    250000 // for ICM2xxxx
+#else
+#define MAX_DELAY_US    320000 // for ICM4xxxx
+#endif
+
+#ifdef FIFO_HIGH_RES_ENABLE
+#define MAX_LSB_DATA    524288.0f   // 2^19
+#else
+#define MAX_LSB_DATA    32768.0f    // 2^15
+#endif
 
 /*******************************************************************************
  * MPLSensor class implementation
@@ -59,16 +81,16 @@ static struct sensor_t sRawSensorList[] =
 {
     {"Invensense Gyroscope Uncalibrated", "Invensense", 1,
      SENSORS_RAW_GYROSCOPE_HANDLE,
-     SENSOR_TYPE_GYROSCOPE_UNCALIBRATED, 2000.0f * M_PI / 180.0f, 2000.0f * M_PI / (180.0f * 32768.0f), 3.0f, 5000, 0, 512 * 7 / 10 / 6,
-     "android.sensor.gyroscope_uncalibrated", "", 250000, SENSOR_FLAG_CONTINUOUS_MODE, {}},
+     SENSOR_TYPE_GYROSCOPE_UNCALIBRATED, GYRO_FSR * M_PI / 180.0f, GYRO_FSR * M_PI / (180.0f * MAX_LSB_DATA), 3.0f, 5000, 0, 512 * 7 / 10 / 6,
+     "android.sensor.gyroscope_uncalibrated", "", MAX_DELAY_US, SENSOR_FLAG_CONTINUOUS_MODE, {}},
     {"Invensense Accelerometer", "Invensense", 1,
      SENSORS_ACCELERATION_HANDLE,
-     SENSOR_TYPE_ACCELEROMETER, GRAVITY_EARTH * ACCEL_FSR, GRAVITY_EARTH * ACCEL_FSR / 32768.0f, 0.4f, 5000, 0, 512 * 7 / 10 / 6,
-     "android.sensor.accelerometer", "", 250000, SENSOR_FLAG_CONTINUOUS_MODE, {}},
+     SENSOR_TYPE_ACCELEROMETER, GRAVITY_EARTH * ACCEL_FSR, GRAVITY_EARTH * ACCEL_FSR / MAX_LSB_DATA, 0.4f, 5000, 0, 512 * 7 / 10 / 6,
+     "android.sensor.accelerometer", "", MAX_DELAY_US, SENSOR_FLAG_CONTINUOUS_MODE, {}},
 #ifdef COMPASS_SUPPORT
     {"Invensense Magnetometer Uncalibrated", "Invensense", 1,
      SENSORS_RAW_MAGNETIC_FIELD_HANDLE,
-     SENSOR_TYPE_MAGNETIC_FIELD_UNCALIBRATED, 10240.0f, 1.0f, 0.5f, 10000, 0, 0,
+     SENSOR_TYPE_MAGNETIC_FIELD_UNCALIBRATED, 10240.0f, 1.0f, 0.5f, 20000, 0, 0,
      "android.sensor.magnetic_field_uncalibrated", "", 250000, SENSOR_FLAG_CONTINUOUS_MODE, {}},
 #endif
 };
@@ -77,16 +99,16 @@ static struct sensor_t sRawSensorList[] =
 {
     {"Invensense Gyroscope Uncalibrated", "Invensense", 1,
      SENSORS_RAW_GYROSCOPE_HANDLE,
-     SENSOR_TYPE_GYROSCOPE_UNCALIBRATED, 2000.0f * M_PI / 180.0f, 2000.0f * M_PI / (180.0f * 32768.0f), 3.0f, 5000, 0, 0,
-     "android.sensor.gyroscope_uncalibrated", "", 250000, SENSOR_FLAG_CONTINUOUS_MODE, {}},
+     SENSOR_TYPE_GYROSCOPE_UNCALIBRATED, GYRO_FSR * M_PI / 180.0f, GYRO_FSR * M_PI / (180.0f * MAX_LSB_DATA), 3.0f, 5000, 0, 0,
+     "android.sensor.gyroscope_uncalibrated", "", MAX_DELAY_US, SENSOR_FLAG_CONTINUOUS_MODE, {}},
     {"Invensense Accelerometer", "Invensense", 1,
      SENSORS_ACCELERATION_HANDLE,
-     SENSOR_TYPE_ACCELEROMETER, GRAVITY_EARTH * ACCEL_FSR, GRAVITY_EARTH * ACCEL_FSR / 32768.0f, 0.4f, 5000, 0, 0,
-     "android.sensor.accelerometer", "", 250000, SENSOR_FLAG_CONTINUOUS_MODE, {}},
+     SENSOR_TYPE_ACCELEROMETER, GRAVITY_EARTH * ACCEL_FSR, GRAVITY_EARTH * ACCEL_FSR / MAX_LSB_DATA, 0.4f, 5000, 0, 0,
+     "android.sensor.accelerometer", "", MAX_DELAY_US, SENSOR_FLAG_CONTINUOUS_MODE, {}},
 #ifdef COMPASS_SUPPORT
     {"Invensense Magnetometer Uncalibrated", "Invensense", 1,
      SENSORS_RAW_MAGNETIC_FIELD_HANDLE,
-     SENSOR_TYPE_MAGNETIC_FIELD_UNCALIBRATED, 10240.0f, 1.0f, 0.5f, 10000, 0, 0,
+     SENSOR_TYPE_MAGNETIC_FIELD_UNCALIBRATED, 10240.0f, 1.0f, 0.5f, 20000, 0, 0,
      "android.sensor.magnetic_field_uncalibrated", "", 250000, SENSOR_FLAG_CONTINUOUS_MODE, {}},
 #endif
 };
@@ -116,11 +138,7 @@ MPLSensor::MPLSensor(CompassSensor *compass) :
     memset(mGyroOrientationMatrix, 0, sizeof(mGyroOrientationMatrix));
     memset(mAccelOrientationMatrix, 0, sizeof(mAccelOrientationMatrix));
     memset(mCompassOrientationMatrix, 0, sizeof(mCompassOrientationMatrix));
-#ifdef __ANDROID__
-    mFlushSensorEnabledVector.setCapacity(TotalNumSensors);
-#else
     mFlushSensorEnabledVector.resize(TotalNumSensors);
-#endif
     memset(mEnabledTime, 0, sizeof(mEnabledTime));
 #ifdef BATCH_MODE_SUPPORT
     mBatchEnabled = 0;
@@ -189,8 +207,22 @@ MPLSensor::MPLSensor(CompassSensor *compass) :
     enableAccel(0);
     enableCompass(0);
 
+    /* FIFO high resolution mode */
+    /* This needs to be set before setting FSR */
+#ifdef FIFO_HIGH_RES_ENABLE
+    write_sysfs_int(mpu.high_res_mode, 1);
+    LOGI("HAL:FIFO High resolution enabled");
+#else
+    write_sysfs_int(mpu.high_res_mode, 0);
+#endif
+
     /* set accel FSR */
-    writeSysfs(ACCEL_FSR_SYSFS, mpu.accel_fsr);
+    write_sysfs_int(mpu.accel_fsr, ACCEL_FSR_SYSFS);
+    read_sysfs_int(mpu.accel_fsr, &mAccelFsrGee); /* read actual fsr */
+
+    /* set gyro FSR */
+    write_sysfs_int(mpu.gyro_fsr, GYRO_FSR_SYSFS);
+    read_sysfs_int(mpu.gyro_fsr, &mGyroFsrDps); /* read actual fsr */
 
 #ifdef BATCH_MODE_SUPPORT
     /* reset batch timeout */
@@ -343,28 +375,9 @@ MPLSensor::~MPLSensor()
         close(mIIOfd);
 }
 
-void MPLSensor::writeSysfs(int data, char *sysfs)
-{
-    int fd;
-    int res;
-
-    LOGV_IF(SYSFS_VERBOSE, "HAL:sysfs:echo %d > %s (%" PRId64 ")",
-            data, sysfs, getTimestamp());
-    fd = open(sysfs, O_RDWR);
-    if (fd < 0) {
-        LOGE("HAL:%s failed to open sysfs", sysfs);
-    } else {
-        res = write_attribute_sensor(fd, data);
-        if (res < 0) {
-            LOGE("HAL:%s failed to write sysfs", sysfs);
-        }
-        close(fd);
-    }
-}
-
 void MPLSensor::writeRateSysfs(int64_t period_ns, char *sysfs_rate)
 {
-    writeSysfs(NS_PER_SECOND_FLOAT / period_ns, sysfs_rate);
+    write_sysfs_int(sysfs_rate, NS_PER_SECOND_FLOAT / period_ns);
 }
 
 void MPLSensor::setGyroRate(int64_t period_ns)
@@ -460,11 +473,7 @@ int MPLSensor::enable(int32_t handle, int en)
 {
     VFUNC_LOG;
 
-#ifdef __ANDROID__
-    android::String8 sname;
-#else
     std::string sname;
-#endif
     int what;
     int err = 0;
 
@@ -491,20 +500,12 @@ int MPLSensor::enable(int32_t handle, int en)
     uint64_t newState = en ? 1 : 0;
 
     LOGV_IF(PROCESS_VERBOSE, "HAL:enable - sensor %s (handle %d) %s -> %s",
-#ifdef __ANDROID__
-            sname.string(),
-#else
             sname.c_str(),
-#endif
             handle,
             ((mEnabled & (1LL << what)) ? "en" : "dis"),
             (((newState) << what) ? "en" : "dis"));
     LOGV_IF(PROCESS_VERBOSE, "HAL:%s sensor state change what=%d",
-#ifdef __ANDROID__
-            sname.string(),
-#else
             sname.c_str(),
-#endif
             what);
 
     if (((newState) << what) != (mEnabled & (1LL << what))) {
@@ -545,7 +546,7 @@ int MPLSensor::rawGyroHandler(sensors_event_t* s)
     int update = 0;
     int data[3];
     int i;
-    float scale = 1.f / 16.4f * 0.0174532925f; // 2000dps
+    float scale = (float)mGyroFsrDps / MAX_LSB_DATA * M_PI / 180;
 
     /* convert to body frame */
     for (i = 0; i < 3 ; i++) {
@@ -584,7 +585,7 @@ int MPLSensor::accelHandler(sensors_event_t* s)
     int update = 0;
     int data[3];
     int i;
-    float scale = 1.f / (32768.0f / ACCEL_FSR) * 9.80665f;
+    float scale = 1.f / (MAX_LSB_DATA / (float)mAccelFsrGee) * 9.80665f;
 
     /* convert to body frame */
     for (i = 0; i < 3 ; i++) {
@@ -670,11 +671,7 @@ int MPLSensor::metaHandler(sensors_event_t* s, int flags)
             s->meta_data.sensor = mFlushSensorEnabledVector[0];
 
             pthread_mutex_lock(&mHALMutex);
-#ifdef __ANDROID__
-            mFlushSensorEnabledVector.removeAt(0);
-#else
             mFlushSensorEnabledVector.erase(mFlushSensorEnabledVector.begin());
-#endif
             pthread_mutex_unlock(&mHALMutex);
             LOGV_IF(HANDLER_DATA,
                     "HAL:flush complete data: type=%d what=%d, "
@@ -691,11 +688,7 @@ int MPLSensor::metaHandler(sensors_event_t* s, int flags)
     return update;
 }
 
-#ifdef __ANDROID__
-void MPLSensor::getHandle(int32_t handle, int &what, android::String8 &sname)
-#else
 void MPLSensor::getHandle(int32_t handle, int &what, std::string &sname)
-#endif
 {
     VFUNC_LOG;
 
@@ -725,11 +718,7 @@ void MPLSensor::getHandle(int32_t handle, int &what, std::string &sname)
     }
     LOGI_IF(PROCESS_VERBOSE, "HAL:getHandle - what=%d, sname=%s",
             what,
-#ifdef __ANDROID__
-            sname.string()
-#else
             sname.c_str()
-#endif
             );
     return;
 }
@@ -741,11 +730,7 @@ int MPLSensor::readEvents(sensors_event_t* data, int count)
     int numEventReceived = 0;
 
     // handle flush complete event
-#ifdef __ANDROID__
-    if(!mFlushSensorEnabledVector.isEmpty()) {
-#else
     if(!mFlushSensorEnabledVector.empty()) {
-#endif
         sensors_event_t temp;
         int sendEvent = metaHandler(&temp, META_DATA_FLUSH_COMPLETE);
         if(sendEvent == 1 && count > 0) {
@@ -847,10 +832,10 @@ int MPLSensor::readMpuEvents(sensors_event_t* s, int count)
                     left_over = mIIOReadSize - ptr;
                     break;
                 }
-                mCachedGyroData[0] = *((short *) (rdata + 2));
-                mCachedGyroData[1] = *((short *) (rdata + 4));
-                mCachedGyroData[2] = *((short *) (rdata + 6));
-                mGyroSensorTimestamp = *((long long*) (rdata + 8));
+                mCachedGyroData[0] = *((int *) (rdata + 4));
+                mCachedGyroData[1] = *((int *) (rdata + 8));
+                mCachedGyroData[2] = *((int *) (rdata + 12));
+                mGyroSensorTimestamp = *((long long*) (rdata + 16));
                 LOGV_IF(INPUT_DATA, "HAL:RAW GYRO DETECTED:0x%x : %d %d %d -- %" PRId64,
                         header,
                         mCachedGyroData[0], mCachedGyroData[1], mCachedGyroData[2],
@@ -863,10 +848,10 @@ int MPLSensor::readMpuEvents(sensors_event_t* s, int count)
                     left_over = mIIOReadSize - ptr;
                     break;
                 }
-                mCachedAccelData[0] = *((short *) (rdata + 2));
-                mCachedAccelData[1] = *((short *) (rdata + 4));
-                mCachedAccelData[2] = *((short *) (rdata + 6));
-                mAccelSensorTimestamp = *((long long*) (rdata + 8));
+                mCachedAccelData[0] = *((int *) (rdata + 4));
+                mCachedAccelData[1] = *((int *) (rdata + 8));
+                mCachedAccelData[2] = *((int *) (rdata + 12));
+                mAccelSensorTimestamp = *((long long*) (rdata +16));
                 LOGV_IF(INPUT_DATA, "HAL:ACCEL DETECTED:0x%x : %d %d %d -- %" PRId64,
                         header,
                         mCachedAccelData[0], mCachedAccelData[1], mCachedAccelData[2],
@@ -1063,6 +1048,9 @@ int MPLSensor::initSysfsAttr(void)
     sprintf(mpu.flush_batch, "%s%s", sysfs_path,
             "/misc_flush_batch");
 
+    /* FIFO high resolution mode */
+    sprintf(mpu.high_res_mode, "%s%s", sysfs_path, "/in_high_res_mode");
+
     return 0;
 }
 
@@ -1070,73 +1058,64 @@ int MPLSensor::batch(int handle, int flags, int64_t period_ns, int64_t timeout)
 {
     VFUNC_LOG;
 
-    int period_ns_int;
-    int i, list_index;
-    bool dryRun = false;
-#ifdef __ANDROID__
-    android::String8 sname;
-#else
+    uint32_t i;
+    int list_index = 0;
     std::string sname;
-#endif
     int what = -1;
 
     /* exit if no chip is connected */
     if (!mChipDetected)
         return -EINVAL;
 
-    period_ns_int = (NS_PER_SECOND + (period_ns - 1))/ period_ns;
-    period_ns = NS_PER_SECOND / period_ns_int;
-
     LOGI_IF(PROCESS_VERBOSE,
             "HAL:batch called - handle=%d, flags=%d, period=%" PRId64 ", timeout=%" PRId64,
             handle, flags, period_ns, timeout);
 
-    if(flags & SENSORS_BATCH_DRY_RUN) {
-        dryRun = true;
-        LOGI_IF(PROCESS_VERBOSE,
-                "HAL:batch - dry run mode is set (%d)", SENSORS_BATCH_DRY_RUN);
-    }
-
-    if (flags & SENSORS_BATCH_WAKE_UPON_FIFO_FULL) {
-        LOGE("HAL: batch SENSORS_BATCH_WAKE_UPON_FIFO_FULL is not supported");
-        return -EINVAL;
-    }
-
+    /* check if the handle is valid */
     getHandle(handle, what, sname);
     if(what < 0) {
         LOGE("HAL:batch sensors %d not found", handle);
         return -EINVAL;
     }
 
-    LOGV_IF(PROCESS_VERBOSE,
-            "HAL:batch : %" PRId64 " ns, (%.2f Hz) timeout=%" PRId64, period_ns, NS_PER_SECOND_FLOAT / period_ns, timeout);
+    /* check if we can support issuing interrupt before FIFO fills-up */
+    /* in a given timeout.                                          */
+    if (flags & SENSORS_BATCH_WAKE_UPON_FIFO_FULL) {
+        LOGE("HAL: batch SENSORS_BATCH_WAKE_UPON_FIFO_FULL is not supported");
+        return -EINVAL;
+    }
 
-    int size = mNumSensors;
-    list_index = -1;
-    for (i = 0; i < size; i++) {
+    /* find sensor_t struct for this sensor */
+    for (i = 0; i < mNumSensors; i++) {
         if (handle == currentSensorList[i].handle) {
             list_index = i;
             break;
         }
     }
+
+    if (period_ns != currentSensorList[list_index].maxDelay * 1000) {
+        /* Round up in Hz when requested frequency has fractional digit.
+         * Note: not round up if requested frequency is the same as maxDelay */
+        int period_ns_int;
+        period_ns_int = (NS_PER_SECOND + (period_ns - 1))/ period_ns;
+        period_ns = NS_PER_SECOND / period_ns_int;
+    }
+
     if (period_ns > currentSensorList[list_index].maxDelay * 1000)
         period_ns = currentSensorList[list_index].maxDelay * 1000;
-
     if (period_ns < currentSensorList[list_index].minDelay * 1000)
         period_ns = currentSensorList[list_index].minDelay * 1000;
 
-#if 1
-    if (size > 0) {
-        if (currentSensorList[list_index].fifoMaxEventCount != 0) {
-            LOGV_IF(PROCESS_VERBOSE, "HAL: batch - select sensor (handle %d)", list_index);
-        } else if (timeout > 0) {
-            LOGE("sensor (handle %d) is not supported in batch mode", list_index);
-            return -EINVAL;
-        }
+    /* just stream with no error return, if the sensor does not support batch mode */
+    if (currentSensorList[list_index].fifoMaxEventCount != 0) {
+        LOGV_IF(PROCESS_VERBOSE, "HAL: batch - select sensor (handle %d)", list_index);
+    } else if (timeout > 0) {
+        LOGV_IF(PROCESS_VERBOSE, "HAL: sensor (handle %d) does not support batch mode", list_index);
+        timeout = 0;
     }
-#endif
 
-    if(dryRun == true) {
+    /* return from here when dry run */
+    if (flags & SENSORS_BATCH_DRY_RUN) {
         return 0;
     }
 
@@ -1169,11 +1148,7 @@ int MPLSensor::flush(int handle)
 {
     VFUNC_LOG;
 
-#ifdef __ANDROID__
-    android::String8 sname;
-#else
     std::string sname;
-#endif
     int what = -1;
 
     /* exit if no chip is connected */
@@ -1187,11 +1162,7 @@ int MPLSensor::flush(int handle)
     }
 
     LOGV_IF(PROCESS_VERBOSE, "HAL: flush - select sensor %s (handle %d)",
-#ifdef __ANDROID__
-            sname.string(),
-#else
             sname.c_str(),
-#endif
             handle);
 
     /*write sysfs */

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2017 InvenSense, Inc.
+ * Copyright (C) 2014-2019 InvenSense, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,19 +14,20 @@
  * limitations under the License.
  */
 
+#include <stdint.h>
+#include <stdbool.h>
+#include <stdio.h>
 #include <dirent.h>
 #include <string.h>
-#include <stdio.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <fcntl.h>
-#include <stdint.h>
 #include <unistd.h>
-#include <inttypes.h>
 
+#include "Log.h"
+#include "ml_sysfs_helper.h"
 #include "SensorBase.h"
 #include "MPLSupport.h"
-#include "log.h"
-#include "ml_sysfs_helper.h"
-//#include "ml_load_dmp.h"
 
 int inv_read_data(char *fname, int *data)
 {
@@ -167,51 +168,64 @@ int write_attribute_sensor_continuous(int fd, int data)
     return num_b;
 }
 
-int read_sysfs_int(char *filename, int *var)
+int read_sysfs_int(const char *filename, int *var)
 {
-    int res=0;
-    FILE  *sysfsfp;
+    int res = 0;
+    int ret;
+    FILE *sysfsfp;
 
     sysfsfp = fopen(filename, "r");
-    if (sysfsfp != NULL) {
-        if (fscanf(sysfsfp, "%d\n", var) < 0 || fclose(sysfsfp) < 0) {
-            res = errno;
-            LOGE("HAL:ERR open file %s to read with error %d", filename, res);
-        }
-        fclose(sysfsfp);
+    if (sysfsfp == NULL) {
+        return -errno;
     }
+    ret = fscanf(sysfsfp, "%d\n", var);
+    if (ret != 1) {
+        res = -errno;
+        LOGE("HAL:ERR open file %s to read with error %d", filename, res);
+    }
+    fclose(sysfsfp);
 
-    return -res;
+    return res;
 }
 
-int read_sysfs_int_array(char *filename, int *var)
+int read_sysfs_int_array(const char *filename, int *var)
 {
-    int res=0;
-    FILE  *sysfsfp;
+    int res = 0;
+    int ret;
+    FILE *sysfsfp;
 
     sysfsfp = fopen(filename, "r");
-    if (sysfsfp != NULL) {
-        if (fscanf(sysfsfp, "%d, %d, %d\n", &var[0], &var[1], &var[2]) < 0 || fclose(sysfsfp) < 0) {
-            res = errno;
-            LOGE("HAL:ERR open file %s to read with error %d", filename, res);
-        }
+    if (sysfsfp == NULL) {
+        return -errno;
     }
-    return -res;
+    ret = fscanf(sysfsfp, "%d, %d, %d\n", &var[0], &var[1], &var[2]);
+    if (ret < 1) {
+        res = -errno;
+        LOGE("HAL:ERR open file %s to read with error %d", filename, res);
+    }
+    fclose(sysfsfp);
+
+    return res;
 }
 
-int read_sysfs_int64(char *filename, int64_t *var)
+int read_sysfs_int64(const char *filename, int64_t *var)
 {
-    int res=0;
-    FILE  *sysfsfp;
+    int res = 0;
+    int ret;
+    FILE *sysfsfp;
 
     sysfsfp = fopen(filename, "r");
-    if (sysfsfp != NULL) {
-        if (fscanf(sysfsfp, "%" SCNd64 "\n", var) < 0 || fclose(sysfsfp) < 0) {
-            res = errno;
-            LOGE("HAL:ERR open file %s to read with error %d", filename, res);
-        }
+    if (sysfsfp == NULL) {
+        return -errno;
     }
-    return -res;
+    ret = fscanf(sysfsfp, "%lld\n", (long long*)var);
+    if (ret != 1) {
+        res = -errno;
+        LOGE("HAL:ERR open file %s to read with error %d", filename, res);
+    }
+    fclose(sysfsfp);
+
+    return res;
 }
 
 void convert_int_to_hex_char(int* quat, unsigned char* hex, int numElement)
@@ -227,40 +241,44 @@ void convert_int_to_hex_char(int* quat, unsigned char* hex, int numElement)
     return;
 }
 
-int write_sysfs_int(char *filename, int var)
+int write_sysfs_int(const char *filename, int var)
 {
     int res = 0;
+    int ret;
     FILE *sysfsfp;
 
     sysfsfp = fopen(filename, "w");
     if (sysfsfp == NULL) {
+        return -errno;
+    }
+    ret = fprintf(sysfsfp, "%d\n", var);
+    if (ret < 0) {
         res = -errno;
         LOGE("HAL:ERR open file %s to write with error %d", filename, res);
-    } else {
-        res = fprintf(sysfsfp, "%d\n", var);
-        if (res < 0) {
-            LOGE("HAL:ERR write to file %s error %d", filename, res);
-        } else {
-            res = 0;
-        }
-        fclose(sysfsfp);
     }
+    fclose(sysfsfp);
+
     return res;
 }
 
-int write_sysfs_intint(char *filename, int64_t var)
+int write_sysfs_intint(const char *filename, int64_t var)
 {
-    int res=0;
-    FILE  *sysfsfp;
+    int res = 0;
+    int ret;
+    FILE *sysfsfp;
 
     sysfsfp = fopen(filename, "w");
-    if (sysfsfp != NULL) {
-        if (fprintf(sysfsfp, "%" PRId64 "\n", var) < 0 || fclose(sysfsfp) < 0) {
-            res = errno;
-            LOGE("HAL:ERR open file %s to write with error %d", filename, res);
-        }
+    if (sysfsfp == NULL) {
+        return -errno;
     }
-    return -res;
+    ret = fprintf(sysfsfp, "%lld\n", (long long)var);
+    if (ret < 0) {
+        res = -errno;
+        LOGE("HAL:ERR open file %s to write with error %d", filename, res);
+    }
+    fclose(sysfsfp);
+
+    return res;
 }
 
 int fill_dev_full_name_by_prefix(const char* dev_prefix,
@@ -305,28 +323,13 @@ int fill_dev_full_name_by_prefix(const char* dev_prefix,
     }
     return 1;
 }
-#if 0
-void dump_dmp_img()
-{
-    FILE *fp;
-    int i;
 
-    char sysfs_path[MAX_SYSFS_NAME_LEN];
-    char dmp_path[MAX_SYSFS_NAME_LEN];
-
-    inv_get_sysfs_path(sysfs_path);
-    sprintf(dmp_path, "%s%s", sysfs_path, "/dmp_firmware_1");
-    LOGI("HAL DEBUG:dump DMP image");
-    LOGI("HAL DEBUG:open %s\n", dmp_path);
-}
-#endif
-
-int read_sysfs_dir(bool fileMode, char *sysfs_path)
+int read_sysfs_dir(bool fileMode, const char *sysfs_path)
 {
     VFUNC_LOG;
 
     int res = 0;
-    char full_path[MAX_SYSFS_NAME_LEN];
+    static char full_path[257];
     int fd;
     char buf[sizeof(int) *4];
     int data;
@@ -350,7 +353,7 @@ int read_sysfs_dir(bool fileMode, char *sysfs_path)
                          !strcmp(ep->d_name, "uevent") || !strcmp(ep->d_name, "dev") ||
                          !strcmp(ep->d_name, "self_test"))
                     continue;
-                sprintf(full_path, "%s%s%s", sysfs_path, "/", ep->d_name);
+                snprintf(full_path, sizeof(full_path), "%s/%s", sysfs_path, ep->d_name);
                 LOGV_IF(0,"HAL DEBUG: reading %s", full_path);
                 fd = open(full_path, O_RDONLY);
                 if (fd > -1) {
@@ -443,4 +446,3 @@ void inv_calculate_bias(float *cal, float *raw, float *bias)
     bias[2] = raw[2] - cal[2];
     return ;
 }
-

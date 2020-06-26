@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2017 InvenSense, Inc.
+ * Copyright (C) 2011-2019 InvenSense, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -127,16 +127,7 @@ typedef uint64_t  __u64;
 
 #ifndef __cplusplus
 #ifndef __KERNEL__
-typedef int_fast8_t bool;
-
-#ifndef false
-#define false 0
-#endif
-
-#ifndef true
-#define true 1
-#endif
-
+#include <stdbool.h>
 #endif
 #endif
 

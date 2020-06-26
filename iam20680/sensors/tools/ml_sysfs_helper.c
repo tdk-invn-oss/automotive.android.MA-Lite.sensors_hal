@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2017 InvenSense, Inc.
+ * Copyright (C) 2014-2019 InvenSense, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-#undef LOG_NDEBUG
-#define LOG_NDEBUG 1 /* Use 0 to turn on LOGV output */
-#undef LOG_TAG
-#define LOG_TAG "MLLITE"
+#undef MPL_LOG_NDEBUG
+#define MPL_LOG_NDEBUG 1 /* Use 0 to turn on MPL_LOGV output */
+#undef MPL_LOG_TAG
+#define MPL_LOG_TAG "MLLITE"
 
 #include <string.h>
 #include <stdio.h>
@@ -37,7 +37,7 @@ enum PROC_SYSFS_CMD {
 	CMD_GET_TRIGGER_PATH,
 	CMD_GET_DEVICE_NODE
 };
-static char sysfs_path[100];
+static char sysfs_path[128];
 static char *chip_name[] = {
     "ITG3500",
     "MPU6050",
@@ -58,6 +58,7 @@ static char *chip_name[] = {
     "ICM20602",
     "ICM20690",
     "IAM20680",
+    "ICM42600",
 };
 static int chip_ind;
 static int initialized =0;
@@ -85,16 +86,18 @@ int find_type_by_name(const char *name, const char *type)
 {
 	const struct dirent *ent;
 	int number, numstrlen;
-	int ret;
 
 	FILE *nameFile;
 	DIR *dp;
 	char thisname[IIO_MAX_NAME_LENGTH];
 	char *filename;
+	size_t filename_sz;
+	int ret;
+	int status = -ENODEV;
 
 	dp = opendir(iio_dir);
 	if (dp == NULL) {
-		LOGE("No industrialio devices available");
+		MPL_LOGE("No industrialio devices available");
 		return -ENODEV;
 	}
 
@@ -110,30 +113,36 @@ int find_type_by_name(const char *name, const char *type)
 			if (strncmp(ent->d_name + strlen(type) + numstrlen,
 					":",
 					1) != 0) {
-				filename = malloc(strlen(iio_dir)
+				filename_sz = strlen(iio_dir)
 						+ strlen(type)
 						+ numstrlen
-						+ 6);
-				if (filename == NULL)
-					return -ENOMEM;
-				sprintf(filename, "%s%s%d/name",
+						+ 6;
+				filename = malloc(filename_sz);
+				if (filename == NULL) {
+					status = -ENOMEM;
+					goto exit_closedir;
+				}
+				snprintf(filename, filename_sz, "%s%s%d/name",
 					iio_dir,
 					type,
 					number);
 				nameFile = fopen(filename, "r");
+				free(filename);
 				if (!nameFile)
 					continue;
-				free(filename);
 				ret = fscanf(nameFile, "%s", thisname);
-				if (ret == 1) {
-					if (strcmp(name, thisname) == 0)
-						return number;
-				}
 				fclose(nameFile);
+				if (ret == 1 && strcmp(name, thisname) == 0) {
+					status = number;
+					goto exit_closedir;
+				}
 			}
 		}
 	}
-	return -ENODEV;
+
+exit_closedir:
+	closedir(dp);
+	return status;
 }
 
 /* mode 0: search for which chip in the system and fill sysfs path
@@ -141,7 +150,8 @@ int find_type_by_name(const char *name, const char *type)
  */
 static int parsing_proc_input(int mode, char *name){
 	const char input[] = "/proc/bus/input/devices";
-	char line[4096], d;
+	static char line[4096];
+	char d;
 	char tmp[100];
 	FILE *fp;
 	int i, j, result, find_flag;
@@ -200,7 +210,7 @@ static int parsing_proc_input(int mode, char *name){
 						tmp[j] = line[i];
 						i ++; j++;
 					}
-					sprintf(sysfs_path, "%s%s", "/sys", tmp);
+					snprintf(sysfs_path, sizeof(sysfs_path), "%s%s", "/sys", tmp);
 					find_flag++;
 				}
 			} else if(mode == 1){
@@ -256,7 +266,7 @@ static void init_iio() {
 	char iio_chip[10];
 	int dev_num;
 	for(j=0; j< (int)CHIP_NUM; j++) {
-		for (i=0; i< (int)strlen(chip_name[j]); i++) {
+		for (i=0; i < (int)strlen(chip_name[j]); i++) {
 			iio_chip[i] = tolower(chip_name[j][i]);
 		}
 		iio_chip[strlen(chip_name[j])] = '\0';
@@ -271,7 +281,7 @@ static void init_iio() {
 
 static int process_sysfs_request(enum PROC_SYSFS_CMD cmd, char *data)
 {
-	char key_path[100];
+	static char key_path[256];
 	FILE *fp;
 	int i, result, ret;
 	if(initialized == 0){
@@ -310,20 +320,18 @@ static int process_sysfs_request(enum PROC_SYSFS_CMD cmd, char *data)
 	case CMD_GET_SYSFS_KEY:
 		memset(key_path, 0, 100);
 		if (iio_initialized == 1)
-			sprintf(key_path, "/sys/bus/iio/devices/iio:device%d/key", iio_dev_num);
+			snprintf(key_path, sizeof(key_path), "/sys/bus/iio/devices/iio:device%d/key", iio_dev_num);
 		else
-			sprintf(key_path, "%s%s", sysfs_path, "/device/invensense/mpu/key");
+			snprintf(key_path, sizeof(key_path), "%s%s", sysfs_path, "/device/invensense/mpu/key");
 
 		if((fp = fopen(key_path, "rt")) == NULL)
 			return -1;
 		for(i=0;i<16;i++){
 			ret = fscanf(fp, "%02x", &result);
-			if (ret != 1) {
-			    result = 0;
-			}
+			if (ret != 1)
+				result = 0;
 			data[i] = (char)result;
 		}
-
 		fclose(fp);
 		break;
 	default:
@@ -336,15 +344,17 @@ int find_name_by_sensor_type(const char *sensor_type, const char *type, char *se
 {
     const struct dirent *ent;
     int number, numstrlen;
-    int ret;
 
     FILE *nameFile;
     DIR *dp;
     char *filename;
+    size_t filename_sz;
+    int ret;
+    int status = -ENODEV;
 
     dp = opendir(iio_dir);
     if (dp == NULL) {
-        LOGE("No industrialio devices available");
+        MPL_LOGE("No industrialio devices available");
         return -ENODEV;
     }
 
@@ -360,75 +370,79 @@ int find_name_by_sensor_type(const char *sensor_type, const char *type, char *se
             if (strncmp(ent->d_name + strlen(type) + numstrlen,
                     ":",
                     1) != 0) {
-                filename = malloc(strlen(iio_dir)
+                filename_sz = strlen(iio_dir)
                         + strlen(type)
                         + numstrlen
                         + 6
-                        + strlen(sensor_type));
-                if (filename == NULL)
-                    return -ENOMEM;
-                sprintf(filename, "%s%s%d/%s",
+                        + strlen(sensor_type);
+                filename = malloc(filename_sz);
+                if (filename == NULL) {
+                    status = -ENOMEM;
+                    goto exit_closedir;
+                }
+                snprintf(filename, filename_sz, "%s%s%d/%s",
                     iio_dir,
                     type,
                     number,
                     sensor_type);
                 nameFile = fopen(filename, "r");
-                LOGI("sensor type path: %s\n", filename);
+                MPL_LOGI("sensor type path: %s\n", filename);
                 free(filename);
                 //fscanf(nameFile, "%s", thisname);
                 //if (strcmp(name, thisname) == 0) {
                 if(nameFile == NULL) {
-                    LOGI("keeps searching");
+                    MPL_LOGI("keeps searching");
                     continue;
                 } else{
-                    LOGI("found directory");
+                    MPL_LOGI("found directory");
+                    fclose(nameFile);
                 }
-                filename = malloc(strlen(iio_dir)
+                filename_sz = strlen(iio_dir)
                         + strlen(type)
                         + numstrlen
-                        + 6);
-                sprintf(filename, "%s%s%d/name",
+                        + 6;
+                filename = malloc(filename_sz);
+                snprintf(filename, filename_sz, "%s%s%d/name",
                     iio_dir,
                     type,
                     number);
-                nameFile = fopen(filename, "r");
-                LOGI("name path: %s\n", filename);
-                free(filename);
-                if (!nameFile)
-                    continue;
-                ret = fscanf(nameFile, "%s", sensor_name);
-                if (ret == 1) {
-                    LOGI("name found: %s now test for mpuxxxx", sensor_name);
+                    nameFile = fopen(filename, "r");
+                    MPL_LOGI("name path: %s\n", filename);
+                    free(filename);
+                    if (!nameFile)
+                        continue;
+                    ret = fscanf(nameFile, "%s", sensor_name);
+		    fclose(nameFile);
+                    if (ret != 1)
+                        continue;
+                    MPL_LOGI("name found: %s now test for mpuxxxx", sensor_name);
                     if( !strncmp("mpu",sensor_name, 3) ||
-                        !strncmp("icm", sensor_name, 3) ) {
+				!strncmp("icm", sensor_name, 3) ) {
                         char secondaryFileName[200];
-                        sprintf(secondaryFileName, "%s%s%d/info_secondary_name",
-                            iio_dir,
-                            type,
-                            number);
+                    snprintf(secondaryFileName, sizeof(secondaryFileName), "%s%s%d/info_secondary_name",
+                        iio_dir,
+                        type,
+                        number);
                         nameFile = fopen(secondaryFileName, "r");
-                        LOGI("name path: %s\n", secondaryFileName);
+                        MPL_LOGI("name path: %s\n", secondaryFileName);
                         if(!nameFile)
                             continue;
                         ret = fscanf(nameFile, "%s", sensor_name);
-                        if (ret == 1) {
-                            LOGI("secondary name found: %s\n", sensor_name);
-                        }
+                        fclose(nameFile);
+                        if (ret != 1)
+                            continue;
+                        MPL_LOGI("secondary name found: %s\n", sensor_name);
                     }
-                    else {
-                        ret = fscanf(nameFile, "%s", sensor_name);
-                        if (ret == 1) {
-                            LOGI("name found: %s\n", sensor_name);
-                        }
-                    }
-                }
-                return 0;
-            //}
-                fclose(nameFile);
+		    status = 0;
+                    goto exit_closedir;
+                //}
             }
         }
     }
-    return -ENODEV;
+
+exit_closedir:
+    closedir(dp);
+    return status;
 }
 
 /**
@@ -575,39 +589,52 @@ inv_error_t inv_get_iio_device_node(const char *name)
 #if 0
 inv_error_t inv_get_soft_iron_matrix(int *in_orient, int *soft_iron)
 {
-	char soft_path[100], final_path[100], mag_name[100];
-	int sens[3], scale, shift, i;
+	static char final_path[256];
+	char soft_path[100], mag_name[100];
+	int sens[3], scale, shift, i, ret;
 	FILE *fp;
+
+    (void)in_orient;
 
 	if (process_sysfs_request(CMD_GET_SYSFS_PATH, (char *)soft_path) < 0)
 		return INV_ERROR_NOT_OPENED;
-	sprintf(final_path, "%s/in_magn_sensitivity_x", soft_path);
+	snprintf(final_path, sizeof(final_path), "%s/in_magn_sensitivity_x", soft_path);
 	if ((fp = fopen(final_path, "r")) == NULL)
 		return INV_ERROR_NOT_OPENED;
-	fscanf(fp, "%d\n", &sens[0]);
+	ret = fscanf(fp, "%d\n", &sens[0]);
+	if (ret != 1)
+		sens[0] = 0;
 	fclose(fp);
 
-	sprintf(final_path, "%s/in_magn_sensitivity_y", soft_path);
+	snprintf(final_path, sizeof(final_path), "%s/in_magn_sensitivity_y", soft_path);
 	if ((fp = fopen(final_path, "r")) == NULL)
 		return INV_ERROR_NOT_OPENED;
-	fscanf(fp, "%d\n", &sens[1]);
+	ret = fscanf(fp, "%d\n", &sens[1]);
+	if (ret != 1)
+		sens[1] = 0;
 	fclose(fp);
-	sprintf(final_path, "%s/in_magn_sensitivity_z", soft_path);
+	snprintf(final_path, sizeof(final_path), "%s/in_magn_sensitivity_z", soft_path);
 	if ((fp = fopen(final_path, "r")) == NULL)
 		return INV_ERROR_NOT_OPENED;
-	fscanf(fp, "%d\n", &sens[2]);
-	fclose(fp);
-
-	sprintf(final_path, "%s/in_magn_scale", soft_path);
-	if ((fp = fopen(final_path, "r")) == NULL)
-		return INV_ERROR_NOT_OPENED;
-	fscanf(fp, "%d\n", &scale);
+	ret = fscanf(fp, "%d\n", &sens[2]);
+	if (ret != 1)
+		sens[2] = 0;
 	fclose(fp);
 
-	sprintf(final_path, "%s/info_secondary_name", soft_path);
+	snprintf(final_path, sizeof(final_path), "%s/in_magn_scale", soft_path);
 	if ((fp = fopen(final_path, "r")) == NULL)
 		return INV_ERROR_NOT_OPENED;
-	fscanf(fp, "%s\n", mag_name);
+	ret = fscanf(fp, "%d\n", &scale);
+	if (ret != 1)
+		scale = 1;
+	fclose(fp);
+
+	snprintf(final_path, sizeof(final_path), "%s/info_secondary_name", soft_path);
+	if ((fp = fopen(final_path, "r")) == NULL)
+		return INV_ERROR_NOT_OPENED;
+	ret = fscanf(fp, "%s\n", mag_name);
+	if (ret != 1)
+		mag_name[0] = '\0';
 	fclose(fp);
 	if (!strcmp("AK09911", mag_name))
 		shift = 23;
@@ -622,7 +649,7 @@ inv_error_t inv_get_soft_iron_matrix(int *in_orient, int *soft_iron)
 	soft_iron[0] = sens[0];
 	soft_iron[4] = sens[1];
 	soft_iron[8] = sens[2];
-	LOGV("Soft Iron Matrix obtained =%d, %d, %d, name=%s, scale=%d, shift=%d\n", sens[0], sens[1], sens[2], mag_name, scale, shift);
+	MPL_LOGV("Soft Iron Matrix obtained =%d, %d, %d, name=%s, scale=%d, shift=%d\n", sens[0], sens[1], sens[2], mag_name, scale, shift);
 
 	return 0;
 }
@@ -631,39 +658,50 @@ inv_error_t inv_get_soft_iron_matrix(int *in_orient, int *soft_iron)
 #if 0
 inv_error_t inv_get_compass_sens( int *compassSens)
 {
-	char soft_path[100], final_path[100], mag_name[100];
-	int sens[3], scale, shift, i;
+	static char final_path[256];
+	char soft_path[100], mag_name[100];
+	int sens[3], scale, shift, i, ret;
 	FILE *fp;
 
 	if (process_sysfs_request(CMD_GET_SYSFS_PATH, (char *)soft_path) < 0)
 		return INV_ERROR_NOT_OPENED;
-	sprintf(final_path, "%s/in_magn_sensitivity_x", soft_path);
+	snprintf(final_path, sizeof(final_path), "%s/in_magn_sensitivity_x", soft_path);
 	if ((fp = fopen(final_path, "r")) == NULL)
 		return INV_ERROR_NOT_OPENED;
-	fscanf(fp, "%d\n", &sens[0]);
+	ret = fscanf(fp, "%d\n", &sens[0]);
+	if (ret != 1)
+		sens[0] = 0;
 	fclose(fp);
 
-	sprintf(final_path, "%s/in_magn_sensitivity_y", soft_path);
+	snprintf(final_path, sizeof(final_path), "%s/in_magn_sensitivity_y", soft_path);
 	if ((fp = fopen(final_path, "r")) == NULL)
 		return INV_ERROR_NOT_OPENED;
-	fscanf(fp, "%d\n", &sens[1]);
+	ret = fscanf(fp, "%d\n", &sens[1]);
+	if (ret != 1)
+		sens[1] = 0;
 	fclose(fp);
-	sprintf(final_path, "%s/in_magn_sensitivity_z", soft_path);
+	snprintf(final_path, sizeof(final_path), "%s/in_magn_sensitivity_z", soft_path);
 	if ((fp = fopen(final_path, "r")) == NULL)
 		return INV_ERROR_NOT_OPENED;
-	fscanf(fp, "%d\n", &sens[2]);
-	fclose(fp);
-
-	sprintf(final_path, "%s/in_magn_scale", soft_path);
-	if ((fp = fopen(final_path, "r")) == NULL)
-		return INV_ERROR_NOT_OPENED;
-	fscanf(fp, "%d\n", &scale);
+	ret = fscanf(fp, "%d\n", &sens[2]);
+	if (ret != 1)
+		sens[2] = 0;
 	fclose(fp);
 
-	sprintf(final_path, "%s/info_secondary_name", soft_path);
+	snprintf(final_path, sizeof(final_path), "%s/in_magn_scale", soft_path);
 	if ((fp = fopen(final_path, "r")) == NULL)
 		return INV_ERROR_NOT_OPENED;
-	fscanf(fp, "%s\n", mag_name);
+	ret = fscanf(fp, "%d\n", &scale);
+	if (ret != 1)
+		scale = 1;
+	fclose(fp);
+
+	snprintf(final_path, sizeof(final_path), "%s/info_secondary_name", soft_path);
+	if ((fp = fopen(final_path, "r")) == NULL)
+		return INV_ERROR_NOT_OPENED;
+	ret = fscanf(fp, "%s\n", mag_name);
+	if (ret != 1)
+		mag_name[0] = '\0';
 	fclose(fp);
 	if (!strcmp("AK09911", mag_name))
 		shift = 23;

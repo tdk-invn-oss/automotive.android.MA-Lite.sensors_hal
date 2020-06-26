@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017-2017 InvenSense, Inc.
+ * Copyright (C) 2017-2019 InvenSense, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,32 +26,32 @@
 #ifndef __ANDROID__
 static inline uint16_t betoh16(uint16_t val)
 {
-	return be16toh(val);
+    return be16toh(val);
 }
 
 static inline uint16_t letoh16(uint16_t val)
 {
-	return le16toh(val);
+    return le16toh(val);
 }
 
 static inline uint32_t betoh32(uint32_t val)
 {
-	return be32toh(val);
+    return be32toh(val);
 }
 
 static inline uint32_t letoh32(uint32_t val)
 {
-	return le32toh(val);
+    return le32toh(val);
 }
 
 static inline uint64_t betoh64(uint64_t val)
 {
-	return be64toh(val);
+    return be64toh(val);
 }
 
 static inline uint64_t letoh64(uint64_t val)
 {
-	return le64toh(val);
+    return le64toh(val);
 }
 #endif
 
@@ -169,12 +169,12 @@ error:
 static inline uint8_t sample_get_u8(const struct inv_iio_buffer_channel *channel,
                                     const void *addr)
 {
-    const uint8_t *raw = addr;
+    const uint8_t *d = addr;
     uint8_t value;
 
-    value = *raw;
-    value >>= channel->shift;
-    value &= (1 << channel->bits);
+    value = *d;
+    value <<= sizeof(value) * 8 - channel->bits - channel->shift;
+    value >>= sizeof(value) * 8 - channel->bits;
 
     return value;
 }
@@ -182,12 +182,12 @@ static inline uint8_t sample_get_u8(const struct inv_iio_buffer_channel *channel
 static inline int8_t sample_get_s8(const struct inv_iio_buffer_channel *channel,
                                    const void *addr)
 {
-    const int8_t *raw = addr;
+    const int8_t *d = addr;
     int8_t value;
 
-    value = *raw;
+    value = *d;
     value <<= sizeof(value) * 8 - channel->bits - channel->shift;
-    value >>= sizeof(value) * 8 - channel->bits + channel->shift;
+    value >>= sizeof(value) * 8 - channel->bits;
 
     return value;
 }
@@ -195,17 +195,16 @@ static inline int8_t sample_get_s8(const struct inv_iio_buffer_channel *channel,
 static inline uint16_t sample_get_u16(const struct inv_iio_buffer_channel *channel,
                                       const void *addr)
 {
-    uint16_t raw;
     uint16_t value;
 
-    memcpy(&raw, addr, sizeof(raw));
+    memcpy(&value, addr, sizeof(value));
     if (channel->is_be) {
-        value = betoh16(raw);
+        value = betoh16(value);
     } else {
-        value = letoh16(raw);
+        value = letoh16(value);
     }
-    value >>= channel->shift;
-    value &= (1 << channel->bits) - 1;
+    value <<= sizeof(value) * 8 - channel->bits - channel->shift;
+    value >>= sizeof(value) * 8 - channel->bits;
 
     return value;
 }
@@ -213,17 +212,16 @@ static inline uint16_t sample_get_u16(const struct inv_iio_buffer_channel *chann
 static inline int16_t sample_get_s16(const struct inv_iio_buffer_channel *channel,
                                      const void *addr)
 {
-    uint16_t raw;
     int16_t value;
 
-    memcpy(&raw, addr, sizeof(raw));
+    memcpy(&value, addr, sizeof(value));
     if (channel->is_be) {
-        value = betoh16(raw);
+        value = betoh16(value);
     } else {
-        value = letoh16(raw);
+        value = letoh16(value);
     }
     value <<= sizeof(value) * 8 - channel->bits - channel->shift;
-    value >>= sizeof(value) * 8 - channel->bits + channel->shift;
+    value >>= sizeof(value) * 8 - channel->bits;
 
     return value;
 }
@@ -232,20 +230,20 @@ static inline int16_t sample_get_s16(const struct inv_iio_buffer_channel *channe
 static inline uint32_t sample_get_u24(const struct inv_iio_buffer_channel *channel,
                                       const void *addr)
 {
-    uint8_t *data;
-    uint32_t raw = 0;
-    uint32_t value;
+    uint32_t value = 0;
+    uint8_t *d;
 
     if (channel->is_be) {
-        data = (uint8_t *)&raw + 1;
-        memcpy(data, addr, 3);
-        value = betoh32(raw);
+        d = (uint8_t *)&value + 1;
+        memcpy(d, addr, 3);
+        value = betoh32(value);
     } else {
-        memcpy(&raw, addr, 3);
-        value = letoh32(raw);
+        d = (uint8_t *)&value;
+        memcpy(d, addr, 3);
+        value = letoh32(value);
     }
-    value >>= channel->shift;
-    value &= (1 << channel->bits) - 1;
+    value <<= sizeof(value) * 8 - channel->bits - channel->shift;
+    value >>= sizeof(value) * 8 - channel->bits;
 
     return value;
 }
@@ -253,20 +251,20 @@ static inline uint32_t sample_get_u24(const struct inv_iio_buffer_channel *chann
 static inline int32_t sample_get_s24(const struct inv_iio_buffer_channel *channel,
                                      const void *addr)
 {
-    uint8_t *data;
-    uint32_t raw = 0;
-    int32_t value;
+    int32_t value = 0;
+    uint8_t *d;
 
     if (channel->is_be) {
-        data = (uint8_t *)&raw + 1;
-        memcpy(data, addr, 3);
-        value = betoh32(raw);
+        d = (uint8_t *)&value + 1;
+        memcpy(d, addr, 3);
+        value = betoh32(value);
     } else {
-        memcpy(&raw, addr, 3);
-        value = letoh32(raw);
+        d = (uint8_t *)&value;
+        memcpy(d, addr, 3);
+        value = letoh32(value);
     }
     value <<= sizeof(value) * 8 - channel->bits - channel->shift;
-    value >>= sizeof(value) * 8 - channel->bits + channel->shift;
+    value >>= sizeof(value) * 8 - channel->bits;
 
     return value;
 }
@@ -274,17 +272,16 @@ static inline int32_t sample_get_s24(const struct inv_iio_buffer_channel *channe
 static inline uint32_t sample_get_u32(const struct inv_iio_buffer_channel *channel,
                                       const void *addr)
 {
-    uint32_t raw;
     uint32_t value;
 
-    memcpy(&raw, addr, sizeof(raw));
+    memcpy(&value, addr, sizeof(value));
     if (channel->is_be) {
-        value = betoh32(raw);
+        value = betoh32(value);
     } else {
-        value = letoh32(raw);
+        value = letoh32(value);
     }
-    value >>= channel->shift;
-    value &= (1 << channel->bits) - 1;
+    value <<= sizeof(value) * 8 - channel->bits - channel->shift;
+    value >>= sizeof(value) * 8 - channel->bits;
 
     return value;
 }
@@ -292,17 +289,16 @@ static inline uint32_t sample_get_u32(const struct inv_iio_buffer_channel *chann
 static inline int32_t sample_get_s32(const struct inv_iio_buffer_channel *channel,
                                      const void *addr)
 {
-    uint32_t raw;
     int32_t value;
 
-    memcpy(&raw, addr, sizeof(raw));
+    memcpy(&value, addr, sizeof(value));
     if (channel->is_be) {
-        value = betoh32(raw);
+        value = betoh32(value);
     } else {
-        value = letoh32(raw);
+        value = letoh32(value);
     }
     value <<= sizeof(value) * 8 - channel->bits - channel->shift;
-    value >>= sizeof(value) * 8 - channel->bits + channel->shift;
+    value >>= sizeof(value) * 8 - channel->bits;
 
     return value;
 }
@@ -310,17 +306,16 @@ static inline int32_t sample_get_s32(const struct inv_iio_buffer_channel *channe
 static inline uint64_t sample_get_u64(const struct inv_iio_buffer_channel *channel,
                                       const void *addr)
 {
-    uint64_t raw;
     uint64_t value;
 
-    memcpy(&raw, addr, sizeof(raw));
+    memcpy(&value, addr, sizeof(value));
     if (channel->is_be) {
-        value = betoh64(raw);
+        value = betoh64(value);
     } else {
-        value = letoh64(raw);
+        value = letoh64(value);
     }
-    value >>= channel->shift;
-    value &= (1ULL << channel->bits) - 1;
+    value <<= sizeof(value) * 8 - channel->bits - channel->shift;
+    value >>= sizeof(value) * 8 - channel->bits;
 
     return value;
 }
@@ -328,25 +323,24 @@ static inline uint64_t sample_get_u64(const struct inv_iio_buffer_channel *chann
 static inline int64_t sample_get_s64(const struct inv_iio_buffer_channel *channel,
                                      const void *addr)
 {
-    uint64_t raw;
     int64_t value;
 
-    memcpy(&raw, addr, sizeof(raw));
+    memcpy(&value, addr, sizeof(value));
     if (channel->is_be) {
-        value = betoh64(raw);
+        value = betoh64(value);
     } else {
-        value = letoh64(raw);
+        value = letoh64(value);
     }
     value <<= sizeof(value) * 8 - channel->bits - channel->shift;
-    value >>= sizeof(value) * 8 - channel->bits + channel->shift;
+    value >>= sizeof(value) * 8 - channel->bits;
 
     return value;
 }
 
-double inv_iio_buffer_channel_get_data(const struct inv_iio_buffer_channel *channel,
-                                       const void *addr)
+int64_t inv_iio_buffer_channel_get_data(const struct inv_iio_buffer_channel *channel,
+                                        const void *addr)
 {
-    double val, result;
+    int64_t val;
 
     switch (channel->size) {
     case 1:
@@ -389,7 +383,5 @@ double inv_iio_buffer_channel_get_data(const struct inv_iio_buffer_channel *chan
         break;
     }
 
-    result = (val + channel->offset) * channel->scale;
-
-    return result;
+    return val;
 }

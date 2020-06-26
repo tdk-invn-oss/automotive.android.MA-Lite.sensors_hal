@@ -18,19 +18,12 @@
 #ifndef COMPASS_SENSOR_PRIMARY_H
 #define COMPASS_SENSOR_PRIMARY_H
 
+#include <stdlib.h>
 #include <stdint.h>
-#include <errno.h>
-#include <sys/cdefs.h>
-#include <sys/types.h>
-
-#include <stdint.h>
-#include <errno.h>
-#include <sys/cdefs.h>
-#include <sys/types.h>
-#include <poll.h>
 
 #include "InvnSensors.h"
 #include "SensorBase.h"
+
 #include "inv_iio_buffer.h"
 
 #define MAX_CHIP_ID_LEN (20)
@@ -39,15 +32,22 @@
 //COMPASS_ID_AK09911
 #define COMPASS_AKM9911_RANGE           (4912.f)
 #define COMPASS_AKM9911_RESOLUTION      (0.6f)
-#define COMPASS_AKM9911_POWER           (2.4f)
-#define COMPASS_AKM9911_MINDELAY        (10000)
+#define COMPASS_AKM9911_POWER           (6.0f)  // IDD2 (max)
+#define COMPASS_AKM9911_MINDELAY        (20000)
 #define COMPASS_AKM9911_MAXDELAY        (200000)
 
+//COMPASS_ID_AK09915
+#define COMPASS_AKM9915_RANGE           (4912.f)
+#define COMPASS_AKM9915_RESOLUTION      (0.15f)
+#define COMPASS_AKM9915_POWER           (3.5f)  // IDD2 (max)
+#define COMPASS_AKM9915_MINDELAY        (20000)
+#define COMPASS_AKM9915_MAXDELAY        (200000)
+
 //COMPASS_ID_AK09916
-#define COMPASS_AKM9916_RANGE           (9830.f)
+#define COMPASS_AKM9916_RANGE           (4912.f)
 #define COMPASS_AKM9916_RESOLUTION      (0.15f)
-#define COMPASS_AKM9916_POWER           (10.f)
-#define COMPASS_AKM9916_MINDELAY        (10000)
+#define COMPASS_AKM9916_POWER           (3.f)   // IDD2 (max)
+#define COMPASS_AKM9916_MINDELAY        (20000)
 #define COMPASS_AKM9916_MAXDELAY        (200000)
 
 class CompassSensor : public SensorBase {
@@ -76,10 +76,6 @@ private:
     struct sysfs_attrbs {
        char *buffer_enable;
        char *buffer_length;
-
-       char *compass_enable;
-       char *compass_index;
-       char *compass_type;
        char *compass_x_enable;
        char *compass_x_index;
        char *compass_x_type;
@@ -93,8 +89,6 @@ private:
        char *timestamp_index;
        char *timestamp_type;
        char *compass_rate;
-       char *compass_scale;
-       char *compass_offset;
        char *compass_x_scale;
        char *compass_x_offset;
        char *compass_y_scale;
@@ -112,7 +106,6 @@ private:
         MAG_X_CHANNEL,
         MAG_Y_CHANNEL,
         MAG_Z_CHANNEL,
-        MAG_CHANNEL,
         TIMESTAMP_CHANNEL,
         CHANNELS_NB,
     };

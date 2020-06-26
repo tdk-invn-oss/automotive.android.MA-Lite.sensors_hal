@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018-2018 InvenSense, Inc.
+ * Copyright (C) 2018-2019 InvenSense, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef LOG_H
-#define LOG_H
+#ifndef _MPL_LOG_H
+#define _MPL_LOG_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -23,83 +23,117 @@ extern "C" {
 
 #ifdef __ANDROID__
 
+#ifdef MPL_LOG_NDEBUG
+#undef LOG_NDEBUG
+#define LOG_NDEBUG	MPL_LOG_NDEBUG
+#endif
+#ifdef MPL_LOG_TAG
+#undef LOG_TAG
+#define LOG_TAG		MPL_LOG_TAG
+#endif
+
 /* Android logs */
-#include <cutils/log.h>
+#include <log/log.h>
 
-#define ASSERT		ALOG_ASSERT
+#define MPL_ASSERT	ALOG_ASSERT
 
-#define LOGV		ALOGV
-#define LOGD		ALOGD
-#define LOGI		ALOGI
-#define LOGW		ALOGW
-#define LOGE		ALOGE
+#define MPL_LOGV	ALOGV
+#define MPL_LOGD	ALOGD
+#define MPL_LOGI	ALOGI
+#define MPL_LOGW	ALOGW
+#define MPL_LOGE	ALOGE
 
-#define LOGV_IF		ALOGV_IF
-#define LOGD_IF		ALOGD_IF
-#define LOGI_IF		ALOGI_IF
-#define LOGW_IF		ALOGW_IF
-#define LOGE_IF		ALOGE_IF
+#define MPL_LOGV_IF	ALOGV_IF
+#define MPL_LOGD_IF	ALOGD_IF
+#define MPL_LOGI_IF	ALOGI_IF
+#define MPL_LOGW_IF	ALOGW_IF
+#define MPL_LOGE_IF	ALOGE_IF
 
 #else
 
 /* Linux logs */
-#if LOG_NDEBUG
+#if MPL_LOG_NDEBUG
 #define NDEBUG
 #endif
 #include <assert.h>
 #include <syslog.h>
 
-#ifndef LOG_TAG
-#define LOG_HEAD	"xxx: "
+#ifndef MPL_LOG_TAG
+#define MPL_LOG_HEAD	"xxx: "
 #else
-#define LOG_HEAD	LOG_TAG ": "
+#define MPL_LOG_HEAD	MPL_LOG_TAG ": "
 #endif
 
-#if LOG_NDEBUG
-#define ASSERT(cond, ...)	((void)0)
+#if MPL_LOG_NDEBUG
+#define MPL_ASSERT(cond, ...)	((void)0)
 #else
-#define ASSERT(cond, ...)				\
-	do {						\
-		syslog(LOG_CRIT, LOG_HEAD __VA_ARGS__);	\
-		assert(cond);				\
+#define MPL_ASSERT(cond, ...)					\
+	do {							\
+		syslog(LOG_CRIT, MPL_LOG_HEAD __VA_ARGS__);	\
+		assert(cond);					\
 	} while (0)
 #endif
 
-#if LOG_NDEBUG
-#define LOGV(...)	((void)0)
-#define LOGD(...)	((void)0)
+#if MPL_LOG_NDEBUG
+#define MPL_LOGV(...)						\
+	if (0) {						\
+		syslog(LOG_DEBUG, MPL_LOG_HEAD __VA_ARGS__);	\
+	}
+#define MPL_LOGD(...)						\
+	if (0) {						\
+		syslog(LOG_DEBUG, MPL_LOG_HEAD __VA_ARGS__);	\
+	}
 #else
-#define LOGV(...)	syslog(LOG_DEBUG, LOG_HEAD __VA_ARGS__)
-#define LOGD(...)	syslog(LOG_DEBUG, LOG_HEAD __VA_ARGS__)
+#define MPL_LOGV(...)	syslog(LOG_DEBUG, MPL_LOG_HEAD __VA_ARGS__)
+#define MPL_LOGD(...)	syslog(LOG_DEBUG, MPL_LOG_HEAD __VA_ARGS__)
 #endif
-#define LOGI(...)	syslog(LOG_INFO, LOG_HEAD __VA_ARGS__)
-#define LOGW(...)	syslog(LOG_WARNING, LOG_HEAD __VA_ARGS__)
-#define LOGE(...)	syslog(LOG_ERR, LOG_HEAD __VA_ARGS__)
+#define MPL_LOGI(...)	syslog(LOG_INFO, MPL_LOG_HEAD __VA_ARGS__)
+#define MPL_LOGW(...)	syslog(LOG_WARNING, MPL_LOG_HEAD __VA_ARGS__)
+#define MPL_LOGE(...)	syslog(LOG_ERR, MPL_LOG_HEAD __VA_ARGS__)
 
 #ifndef __predict_false
 #define __predict_false(exp) __builtin_expect((exp) != 0, 0)
 #endif
 
-#define LOGV_IF(cond, ...)					\
-	((__predict_false(cond)) ? ((void)LOGV(__VA_ARGS__))	\
+#define MPL_LOGV_IF(cond, ...)						\
+	((__predict_false(cond)) ? ((void)MPL_LOGV(__VA_ARGS__))	\
 				 : (void)0)
-#define LOGD_IF(cond, ...)					\
-	((__predict_false(cond)) ? ((void)LOGD(__VA_ARGS__))	\
+#define MPL_LOGD_IF(cond, ...)						\
+	((__predict_false(cond)) ? ((void)MPL_LOGD(__VA_ARGS__))	\
 				 : (void)0)
-#define LOGI_IF(cond, ...)					\
-	((__predict_false(cond)) ? ((void)LOGI(__VA_ARGS__))	\
+#define MPL_LOGI_IF(cond, ...)						\
+	((__predict_false(cond)) ? ((void)MPL_LOGI(__VA_ARGS__))	\
 				 : (void)0)
-#define LOGW_IF(cond, ...)					\
-	((__predict_false(cond)) ? ((void)LOGW(__VA_ARGS__))	\
+#define MPL_LOGW_IF(cond, ...)						\
+	((__predict_false(cond)) ? ((void)MPL_LOGW(__VA_ARGS__))	\
 				 : (void)0)
-#define LOGE_IF(cond, ...)					\
-	((__predict_false(cond)) ? ((void)LOGE(__VA_ARGS__))	\
+#define MPL_LOGE_IF(cond, ...)						\
+	((__predict_false(cond)) ? ((void)MPL_LOGE(__VA_ARGS__))	\
 				 : (void)0)
 
 #endif		/* __ANDROID__ */
+
+static inline void __print_result_location(int result,
+					   const char *file,
+					   const char *func, int line)
+{
+	MPL_LOGE("%s|%s|%d returning %d\n", file, func, line, result);
+}
+
+#define LOG_RESULT_LOCATION(condition)					\
+	do {								\
+		__print_result_location((int)(condition), __FILE__,	\
+					__func__, __LINE__);		\
+	} while (0)
+
+#define INV_ERROR_CHECK(r_1329)			\
+	if (r_1329) {				\
+		LOG_RESULT_LOCATION(r_1329);	\
+		return r_1329;			\
+	}
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif		/* LOG_H */
+#endif		/* _MPL_LOG_H */

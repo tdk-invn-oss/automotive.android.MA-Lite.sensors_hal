@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2017 InvenSense, Inc.
+ * Copyright (C) 2014-2019 InvenSense, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <inttypes.h>
-#include "log.h"
+#include "Log.h"
 
 #include "InvnSensors.h"
 #include "MPLSensor.h"

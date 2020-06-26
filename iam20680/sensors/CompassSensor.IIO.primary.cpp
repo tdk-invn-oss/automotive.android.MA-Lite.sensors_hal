@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2014-2017 The Android Open Source Project
- * Copyright (C) 2017-2018 InvenSense, Inc.
+ * Copyright (C) 2017-2019 InvenSense, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,20 +18,18 @@
 #define LOG_NDEBUG 0
 
 #include <fcntl.h>
-#include <errno.h>
-#include <math.h>
-#include <unistd.h>
-#include <dirent.h>
-#include <stdlib.h>
 #include <stdio.h>
-#include <sys/select.h>
+#include <stdint.h>
+#include <errno.h>
+#include <unistd.h>
 #include <string.h>
 #include <inttypes.h>
+#include <math.h>
 
 #include "CompassSensor.IIO.primary.h"
 #include "InvnSensors.h"
 #include "MPLSupport.h"
-#include "log.h"
+#include "Log.h"
 #include "ml_sysfs_helper.h"
 #include "inv_iio_buffer.h"
 
@@ -77,16 +75,26 @@ CompassSensor::CompassSensor()
     fptr = fopen(compassSysFs.compass_orient, "r");
     if (fptr != NULL) {
         int om[9];
-        if (fscanf(fptr, "%d,%d,%d,%d,%d,%d,%d,%d,%d",
+        if (fscanf(fptr, "%d, %d, %d; %d, %d, %d; %d, %d, %d",
                &om[0], &om[1], &om[2], &om[3], &om[4], &om[5],
-               &om[6], &om[7], &om[8]) < 0 || fclose(fptr)) {
-            LOGE("HAL:could not read compass mounting matrix");
+               &om[6], &om[7], &om[8]) != 9) {
+            LOGE("HAL:could not read compass mounting matrix\n"
+                 "will use default mounting matrix: "
+                 "%+d %+d %+d %+d %+d %+d %+d %+d %+d",
+                    mCompassOrientation[0],
+                    mCompassOrientation[1],
+                    mCompassOrientation[2],
+                    mCompassOrientation[3],
+                    mCompassOrientation[4],
+                    mCompassOrientation[5],
+                    mCompassOrientation[6],
+                    mCompassOrientation[7],
+                    mCompassOrientation[8]);
         } else {
             LOGV_IF(PROCESS_VERBOSE,
                     "HAL:compass mounting matrix: "
                     "%+d %+d %+d %+d %+d %+d %+d %+d %+d",
                     om[0], om[1], om[2], om[3], om[4], om[5], om[6], om[7], om[8]);
-
             mCompassOrientation[0] = om[0];
             mCompassOrientation[1] = om[1];
             mCompassOrientation[2] = om[2];
@@ -97,6 +105,7 @@ CompassSensor::CompassSensor()
             mCompassOrientation[7] = om[7];
             mCompassOrientation[8] = om[8];
         }
+        fclose(fptr);
     }
 }
 
@@ -106,10 +115,10 @@ void CompassSensor::enableIIOSysfs()
 
     char iio_device_node[MAX_CHIP_ID_LEN];
     const char* compass = dev_full_name;
-    size_t size;
+    size_t size, align, addr;
     int ret = 0;
 
-    // enable 3-axis mag + status + timestamp into buffer
+    // enable 3-axis mag + timestamp into buffer
     LOGV_IF(SYSFS_VERBOSE, "HAL:sysfs:echo %d > %s (%" PRId64 ")",
             1, compassSysFs.compass_x_enable, getTimestamp());
     ret = write_sysfs_int(compassSysFs.compass_x_enable, 1);
@@ -122,10 +131,6 @@ void CompassSensor::enableIIOSysfs()
             1, compassSysFs.compass_z_enable, getTimestamp());
     ret = write_sysfs_int(compassSysFs.compass_z_enable, 1);
     LOGE_IF(ret != 0, "HAL:sysfs error enabling iio buffer in_magn_z");
-    LOGV_IF(SYSFS_VERBOSE, "HAL:sysfs:echo %d > %s (%" PRId64 ")",
-            1, compassSysFs.compass_enable, getTimestamp());
-    ret = write_sysfs_int(compassSysFs.compass_enable, 1);
-    LOGE_IF(ret != 0, "HAL:sysfs error enabling iio buffer in_magn");
     LOGV_IF(SYSFS_VERBOSE, "HAL:sysfs:echo %d > %s (%" PRId64 ")",
             1, compassSysFs.timestamp_enable, getTimestamp());
     ret = write_sysfs_int(compassSysFs.timestamp_enable, 1);
@@ -150,12 +155,6 @@ void CompassSensor::enableIIOSysfs()
                                 compassSysFs.compass_z_offset,
                                 compassSysFs.compass_z_scale,
                                 &compassBufferScan.channels[MAG_Z_CHANNEL]);
-    inv_iio_buffer_scan_channel(compassSysFs.compass_enable,
-                                compassSysFs.compass_index,
-                                compassSysFs.compass_type,
-                                compassSysFs.compass_offset,
-                                compassSysFs.compass_scale,
-                                &compassBufferScan.channels[MAG_CHANNEL]);
     inv_iio_buffer_scan_channel(compassSysFs.timestamp_enable,
                                 compassSysFs.timestamp_index,
                                 compassSysFs.timestamp_type,
@@ -163,23 +162,36 @@ void CompassSensor::enableIIOSysfs()
                                 compassSysFs.timestamp_scale,
                                 &compassBufferScan.channels[TIMESTAMP_CHANNEL]);
 
-    // compute buffer size
+    // compute buffer size and alignment
     size = 0;
+    align = 0;
     for (size_t i = 0; i < ARRAY_SIZE(compassBufferScan.channels); ++i) {
         if (compassBufferScan.channels[i].is_enabled) {
             size += compassBufferScan.channels[i].size;
+            if (compassBufferScan.channels[i].size > align) {
+                align = compassBufferScan.channels[i].size;
+            }
         }
+    }
+    // must be multiple of alignment
+    if (size % align != 0) {
+        size += align - (size % align);
     }
     compassBufferScan.size = size;
 
     // compute addresses
-    size = 0;
+    addr = 0;
     for (size_t idx = 0; idx < CHANNELS_NB; ++idx) {
         for (size_t i = 0; i < ARRAY_SIZE(compassBufferScan.channels); ++i) {
             if (compassBufferScan.channels[i].index == idx) {
                 if (compassBufferScan.channels[i].is_enabled) {
-                    compassBufferScan.addresses[i] = size;
-                    size += compassBufferScan.channels[i].size;
+                    size = compassBufferScan.channels[i].size;
+                    // handle address alignment
+                    if (addr % size != 0) {
+                        addr += size - (addr % size);
+                    }
+                    compassBufferScan.addresses[i] = addr;
+                    addr += size;
                 } else {
                     compassBufferScan.addresses[i] = -1;
                 }
@@ -275,8 +287,8 @@ int CompassSensor::enable(int32_t handle, int en)
 int CompassSensor::setDelay(int32_t handle, int64_t ns)
 {
     VFUNC_LOG;
-    FILE *file;
     double freq;
+    int freq_int;
     int res;
 
     (void)handle;
@@ -290,25 +302,20 @@ int CompassSensor::setDelay(int32_t handle, int64_t ns)
         ns = mMaxDelay;
 
     freq = 1000000000.0 / ns;
+    freq_int = (int)ceil(freq);
 
-    LOGV_IF(SYSFS_VERBOSE, "HAL:sysfs:echo %.6f > %s (%" PRId64 ")",
-            freq, compassSysFs.compass_rate, getTimestamp());
-    file = fopen(compassSysFs.compass_rate, "w");
-    if (file == NULL) {
+    LOGV_IF(SYSFS_VERBOSE, "HAL:sysfs:echo %d > %s (%" PRId64 ")",
+            freq_int, compassSysFs.compass_rate, getTimestamp());
+    res = write_sysfs_int(compassSysFs.compass_rate, freq_int);
+    if (res) {
         LOGE("HAL:Compass error opening compass rate file");
-        return -1;
-    }
-    res = fprintf(file, "%.6f\n", freq);
-    fclose(file);
-    if (res >= 0) {
+    } else {
         mDelay = ns;
-        res = 0;
     }
 
     return res;
 }
 
-/* use for Invensense compass calibration */
 void CompassSensor::getOrientationMatrix(int8_t *orient)
 {
     VFUNC_LOG;
@@ -329,6 +336,7 @@ int CompassSensor::readSample(int *data, int64_t *timestamp, int len) {
     (void)len;
 
     char *rdata = mIIOBuffer;
+    int64_t raw;
     double sample;
     struct inv_iio_buffer_channel *channel;
     ssize_t address;
@@ -350,7 +358,9 @@ int CompassSensor::readSample(int *data, int64_t *timestamp, int len) {
             if (!channel->is_enabled) {
                 data[i - MAG_X_CHANNEL] = 0;
             } else {
-                sample = inv_iio_buffer_channel_get_data(channel, &rdata[address]);
+                raw = inv_iio_buffer_channel_get_data(channel, &rdata[address]);
+                // apply offset + scale
+                sample = inv_iio_buffer_convert_data(channel, raw);
                 // sample is Gauss = 100uT, scale is 2^16 for 1 uT */
                 data[i - MAG_X_CHANNEL] = sample * 100.0 * (1 << 16);
             }
@@ -361,8 +371,8 @@ int CompassSensor::readSample(int *data, int64_t *timestamp, int len) {
         if (!channel->is_enabled) {
             *timestamp = 0;
         } else {
-            sample = inv_iio_buffer_channel_get_data(channel, &rdata[address]);
-            *timestamp = sample;
+            raw = inv_iio_buffer_channel_get_data(channel, &rdata[address]);
+            *timestamp = raw;
         }
         LOGV_IF(INPUT_DATA, "HAL:compass data : %d %d %d -- %" PRId64 "",
                 data[0], data[1], data[2], *timestamp);
@@ -375,13 +385,17 @@ void CompassSensor::fillList(struct sensor_t *list)
 {
     VFUNC_LOG;
 
-    list->maxRange = COMPASS_RANGE(AKM9911);
-    list->resolution = COMPASS_RESOLUTION(AKM9911);
-    list->power = COMPASS_POWER(AKM9911);
-    list->minDelay = COMPASS_MINDELAY(AKM9911);
+    list->maxRange = COMPASS_RANGE(AKM9915);
+    list->resolution = COMPASS_RESOLUTION(AKM9915);
+    list->power = COMPASS_POWER(AKM9915);
+    list->minDelay = COMPASS_MINDELAY(AKM9915);
     list->fifoReservedEventCount = 0;
     list->fifoMaxEventCount = 0;
-    list->maxDelay = COMPASS_MAXDELAY(AKM9911);
+    list->maxDelay = COMPASS_MAXDELAY(AKM9915);
+
+    // min delay truncated to 50Hz (20000us), sufficient for HiFi and can handle timer drivers
+    if (list->minDelay < 20000)
+        list->minDelay = 20000;
 
     mMinDelay = (int64_t)list->minDelay * 1000LL;
     mMaxDelay = (int64_t)list->maxDelay * 1000LL;
@@ -413,22 +427,6 @@ int CompassSensor::initSysfsAttr(void)
         goto error_free;
     }
     ret = asprintf(&compassSysFs.buffer_length, "%s/buffer/length", sysfs_path);
-    if (ret == -1) {
-        ret = -ENOMEM;
-        goto error_free;
-    }
-
-    ret = asprintf(&compassSysFs.compass_enable, "%s/scan_elements/in_magn_en", sysfs_path);
-    if (ret == -1) {
-        ret = -ENOMEM;
-        goto error_free;
-    }
-    ret = asprintf(&compassSysFs.compass_index, "%s/scan_elements/in_magn_index", sysfs_path);
-    if (ret == -1) {
-        ret = -ENOMEM;
-        goto error_free;
-    }
-    ret = asprintf(&compassSysFs.compass_type, "%s/scan_elements/in_magn_type", sysfs_path);
     if (ret == -1) {
         ret = -ENOMEM;
         goto error_free;
@@ -493,17 +491,7 @@ int CompassSensor::initSysfsAttr(void)
         ret = -ENOMEM;
         goto error_free;
     }
-    ret = asprintf(&compassSysFs.compass_rate, "%s/in_magn_sampling_frequency", sysfs_path);
-    if (ret == -1) {
-        ret = -ENOMEM;
-        goto error_free;
-    }
-    ret = asprintf(&compassSysFs.compass_scale, "%s/in_magn_scale", sysfs_path);
-    if (ret == -1) {
-        ret = -ENOMEM;
-        goto error_free;
-    }
-    ret = asprintf(&compassSysFs.compass_offset, "%s/in_magn_offset", sysfs_path);
+    ret = asprintf(&compassSysFs.compass_rate, "%s/sampling_frequency", sysfs_path);
     if (ret == -1) {
         ret = -ENOMEM;
         goto error_free;
@@ -548,7 +536,7 @@ int CompassSensor::initSysfsAttr(void)
         ret = -ENOMEM;
         goto error_free;
     }
-    ret = asprintf(&compassSysFs.compass_orient, "%s/in_magn_mount_matrix", sysfs_path);
+    ret = asprintf(&compassSysFs.compass_orient, "%s/in_mount_matrix", sysfs_path);
     if (ret == -1) {
         ret = -ENOMEM;
         goto error_free;

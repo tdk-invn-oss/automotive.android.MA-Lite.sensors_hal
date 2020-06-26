@@ -1,5 +1,5 @@
 # Copyright (C) 2016-2017 The Android Open Source Project
-# Copyright (C) 2017-2018 InvenSense, Inc.
+# Copyright (C) 2017-2019 InvenSense, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -28,9 +28,9 @@ LOCAL_CFLAGS := -Wall -Wextra -Werror
 LOCAL_CFLAGS += -DLOG_TAG=\"Sensors\"
 
 # Sensors HAL version
-INV_SENSORS_HAL_VERSION_MAJOR := 8
+INV_SENSORS_HAL_VERSION_MAJOR := 9
 INV_SENSORS_HAL_VERSION_MINOR := 1
-INV_SENSORS_HAL_VERSION_PATCH := 7
+INV_SENSORS_HAL_VERSION_PATCH := 1
 INV_SENSORS_HAL_VERSION_SUFFIX := -simple-android-linux-test1
 $(info InvenSense Sensors HAL version MA-$(INV_SENSORS_HAL_VERSION_MAJOR).$(INV_SENSORS_HAL_VERSION_MINOR).$(INV_SENSORS_HAL_VERSION_PATCH)$(INV_SENSORS_HAL_VERSION_SUFFIX))
 LOCAL_CFLAGS += -DINV_SENSORS_HAL_VERSION_MAJOR=$(INV_SENSORS_HAL_VERSION_MAJOR)
@@ -39,12 +39,31 @@ LOCAL_CFLAGS += -DINV_SENSORS_HAL_VERSION_PATCH=$(INV_SENSORS_HAL_VERSION_PATCH)
 LOCAL_CFLAGS += -DINV_SENSORS_HAL_VERSION_SUFFIX=\"$(INV_SENSORS_HAL_VERSION_SUFFIX)\"
 
 # InvenSense chip type
+# Select from "iam20680", "icm20602", "icm20690", "icm42600", "icm42686"
+# (Note: select "icm42600" for icm40607)
 INVENSENSE_CHIP ?= iam20680
 $(info InvenSense chip $(INVENSENSE_CHIP))
 
 # Batch mode support
 ifneq (,$(filter $(INVENSENSE_CHIP), iam20680))
 LOCAL_CFLAGS += -DBATCH_MODE_SUPPORT
+endif
+
+# ODR configuration according to chip type
+# Define for devices with SMPLRT_DIV register
+ifneq (,$(filter $(INVENSENSE_CHIP), iam20680 icm20602 icm20690))
+LOCAL_CFLAGS += -DODR_SMPLRT_DIV
+endif
+
+# Enhanced FSR support (4000dps, 32g)
+ifneq (,$(filter $(INVENSENSE_CHIP), icm42686))
+LOCAL_CFLAGS += -DACCEL_ENHANCED_FSR_SUPPORT
+LOCAL_CFLAGS += -DGYRO_ENHANCED_FSR_SUPPORT
+endif
+
+# FIFO high resolution mode
+ifneq (,$(filter $(INVENSENSE_CHIP), icm42686))
+LOCAL_CFLAGS += -DFIFO_HIGH_RES_ENABLE
 endif
 
 # Compass support
@@ -56,14 +75,12 @@ endif
 
 # Android version check
 MAJOR_VERSION :=$(shell echo $(PLATFORM_VERSION) | cut -f1 -d.)
-MINOR_VERSION :=$(shell echo $(PLATFORM_VERSION) | cut -f2 -d.)
-$(info ANDROID_VERSION = $(MAJOR_VERSION).$(MINOR_VERSION))
-LOCAL_CFLAGS += -DANDROID_MAJOR_VERSION=$(MAJOR_VERSION)
-LOCAL_CFLAGS += -DANDROID_MINOR_VERSION=$(MINOR_VERSION)
+$(info ANDROID_VERSION = $(MAJOR_VERSION))
 
 # Android O support
-ifeq ($(shell test $(MAJOR_VERSION) -gt 7 && echo true), true)
+ifeq ($(shell test $(MAJOR_VERSION) -ge 8 && echo true), true)
 LOCAL_PROPRIETARY_MODULE := true
+LOCAL_HEADER_LIBRARIES := libhardware_headers
 endif
 
 LOCAL_SRC_FILES += SensorsMain.cpp

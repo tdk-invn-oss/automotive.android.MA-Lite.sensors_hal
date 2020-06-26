@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017-2017 InvenSense, Inc.
+ * Copyright (C) 2017-2019 InvenSense, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,11 +64,17 @@ int inv_iio_buffer_scan_channel(const char *sysfs_enable, const char *sysfs_inde
 /**
  * inv_iio_buffer_channel_get_data - extract data from a channel
  * @channel:		Channel data information
- * @addr:		Data address corresponding to this channel
- * @return:		Data extracted and corrected with offset/scale
+ * @addr:		Data address in the sample corresponding to this channel
+ * @return:		Data extracted from the sample
  */
-double inv_iio_buffer_channel_get_data(const struct inv_iio_buffer_channel *channel,
-                                       const void *addr);
+int64_t inv_iio_buffer_channel_get_data(const struct inv_iio_buffer_channel *channel,
+                                        const void *addr);
+
+static inline double inv_iio_buffer_convert_data(const struct inv_iio_buffer_channel *channel,
+                                                 int64_t data)
+{
+    return ((double)data + channel->offset) * channel->scale;
+}
 
 #ifdef __cplusplus
 }

@@ -4,6 +4,10 @@ HAL_SRC_DIR := ../..
 # Compiler flags
 CFLAGS += -O2
 CFLAGS += -Wall -Wextra -Werror
+CFLAGS += -std=gnu11
+
+# Enable FIFO high resolution mode (only for ICM42686)
+#CFLAGS += -DHIGH_RES_MODE_ENABLE
 
 # source C files
 SRC_C_FILES += test-sensors-sysfs.c
