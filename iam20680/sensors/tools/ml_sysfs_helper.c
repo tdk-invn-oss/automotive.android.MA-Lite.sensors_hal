@@ -130,7 +130,7 @@ int find_type_by_name(const char *name, const char *type)
 				free(filename);
 				if (!nameFile)
 					continue;
-				ret = fscanf(nameFile, "%s", thisname);
+				ret = fscanf(nameFile, "%29s", thisname);
 				fclose(nameFile);
 				if (ret == 1 && strcmp(name, thisname) == 0) {
 					status = number;
