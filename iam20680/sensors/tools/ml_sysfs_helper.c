@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2019 InvenSense, Inc.
+ * Copyright (C) 2014-2020 InvenSense, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,7 +58,9 @@ static char *chip_name[] = {
     "ICM20602",
     "ICM20690",
     "IAM20680",
+    "ICM40600",
     "ICM42600",
+    "ICM43600",
 };
 static int chip_ind;
 static int initialized =0;

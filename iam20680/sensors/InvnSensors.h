@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2017 InvenSense, Inc.
+ * Copyright (C) 2014-2020 InvenSense, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@ enum {
     ID_RG = 0,
     ID_A,
     ID_RM,
+    ID_PS,
     ID_NUMBER
 };
 
@@ -39,6 +40,7 @@ enum {
     RawGyro = ID_RG,
     Accelerometer = ID_A,
     RawMagneticField = ID_RM,
+    Pressure = ID_PS,
     TotalNumSensors = ID_NUMBER,
 };
 
@@ -46,6 +48,7 @@ enum {
 #define SENSORS_RAW_GYROSCOPE_HANDLE               (ID_RG)
 #define SENSORS_ACCELERATION_HANDLE                (ID_A)
 #define SENSORS_RAW_MAGNETIC_FIELD_HANDLE          (ID_RM)
+#define SENSORS_PRESSURE_HANDLE                    (ID_PS)
 
 __END_DECLS
 

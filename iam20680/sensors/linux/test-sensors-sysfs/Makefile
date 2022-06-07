@@ -1,19 +1,19 @@
 # HAL source files location
 HAL_SRC_DIR := ../..
 
+include $(HAL_SRC_DIR)/invensense.mk
+
 # Compiler flags
 CFLAGS += -O2
 CFLAGS += -Wall -Wextra -Werror
 CFLAGS += -std=gnu11
-
-# Enable FIFO high resolution mode (only for ICM42686)
-#CFLAGS += -DHIGH_RES_MODE_ENABLE
+CFLAGS += $(INV_CFLAGS)
 
 # source C files
 SRC_C_FILES += test-sensors-sysfs.c
 
 # include dirs
-CFLAGS += -I$(HAL_SRC_DIR)/tools
+CFLAGS += $(foreach inc, $(INV_INCLUDES), -I$(HAL_SRC_DIR)/$(inc))
 
 # test application
 TEST_MODULE := test-sensors-sysfs

@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2014-2017 The Android Open Source Project
- * Copyright (C) 2017-2019 InvenSense, Inc.
+ * Copyright (C) 2017-2020 InvenSense, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,10 +30,9 @@
 #include "InvnSensors.h"
 #include "MPLSupport.h"
 #include "Log.h"
+#include "sensor_params.h"
 #include "ml_sysfs_helper.h"
 #include "inv_iio_buffer.h"
-
-#define COMPASS_MAX_SYSFS_ATTRB         (sizeof(compassSysFs) / sizeof(char*))
 
 #define COMPASS_VENDOR(_chip)           COMPASS_##_chip##_VENDOR
 #define COMPASS_RANGE(_chip)            COMPASS_##_chip##_RANGE
@@ -42,22 +41,41 @@
 #define COMPASS_MINDELAY(_chip)         COMPASS_##_chip##_MINDELAY
 #define COMPASS_MAXDELAY(_chip)         COMPASS_##_chip##_MAXDELAY
 
+static const struct sensor_t sSensorList[] = {
+    {
+        "Invensense Magnetometer Uncalibrated", "Invensense", 1,
+        SENSORS_RAW_MAGNETIC_FIELD_HANDLE,
+        SENSOR_TYPE_MAGNETIC_FIELD_UNCALIBRATED,
+        10240.0f, 1.0f, 0.5f, 20000, 0, 0,
+        "android.sensor.magnetic_field_uncalibrated", "", 250000,
+        SENSOR_FLAG_CONTINUOUS_MODE, {}
+    },
+};
+
 static int8_t defaultOrientation[9] = {
     0, 1, 0, 1, 0, 0, 0, 0, -1,
 };
 
 /******************************************************************************/
 
-CompassSensor::CompassSensor()
-                    :mEnable(0)
+CompassSensor::CompassSensor() :
+        SensorBase(NULL, NULL),
+        dev_full_name{0},
+        mEnable(-1),
+        mDelay(0),
+        mTimestamp(0)
 {
     FILE *fptr;
 
     VFUNC_LOG;
 
     find_name_by_sensor_type(COMPASS_ON_PRIMARY, "iio:device", dev_full_name);
+    if (strcmp(dev_full_name, "") == 0) {
+        LOGI("Compass HAL:No sensor found\n");
+        return;
+    }
 
-    if (initSysfsAttr()) {
+    if (inv_init_sysfs_attributes()) {
         LOGE("Error Instantiating Compass\n");
         return;
     }
@@ -68,7 +86,7 @@ CompassSensor::CompassSensor()
     enable(ID_RM, 0);
 
     LOGI("HAL:compass chip %s", dev_full_name);
-    enableIIOSysfs();
+    enable_iio_sysfs();
 
     LOGV_IF(SYSFS_VERBOSE, "HAL:sysfs:cat %s (%" PRId64 ")",
             compassSysFs.compass_orient, getTimestamp());
@@ -109,7 +127,7 @@ CompassSensor::CompassSensor()
     }
 }
 
-void CompassSensor::enableIIOSysfs()
+void CompassSensor::enable_iio_sysfs()
 {
     VFUNC_LOG;
 
@@ -223,15 +241,15 @@ void CompassSensor::enableIIOSysfs()
 
     snprintf(iio_device_node, sizeof(iio_device_node), "/dev/iio:device%d",
              find_type_by_name(compass, "iio:device"));
-    compass_fd = open(iio_device_node, O_RDONLY);
+    dev_fd = open(iio_device_node, O_RDONLY);
     int res = errno;
-    if (compass_fd < 0) {
+    if (dev_fd < 0) {
         LOGE("HAL:could not open '%s' iio device node in path '%s' - "
              "error '%s' (%d)",
              compass, iio_device_node, strerror(res), res);
     } else {
         LOGV_IF(PROCESS_VERBOSE,
-                "HAL:iio %s, compass_fd opened : %d", compass, compass_fd);
+                "HAL:iio %s, fd opened : %d", compass, dev_fd);
     }
 }
 
@@ -239,19 +257,36 @@ CompassSensor::~CompassSensor()
 {
     VFUNC_LOG;
 
+    close(dev_fd);
     for (size_t i = 0; i < COMPASS_MAX_SYSFS_ATTRB; ++i) {
         char *attr = (char *)&compassSysFs + i;
         free(attr);
     }
-    if (compass_fd > 0)
-        close(compass_fd);
 }
 
-int CompassSensor::getFd(void) const
+int CompassSensor::isSensorPresent()
 {
-    VHANDLER_LOG;
-    LOGI_IF(0, "HAL:compass_fd=%d", compass_fd);
-    return compass_fd;
+    VFUNC_LOG;
+
+    if (strcmp(dev_full_name, "") == 0)
+        return 0;
+    else
+        return 1;
+}
+
+int CompassSensor::populateSensorList(struct sensor_t *list, int len)
+{
+    int currentSize = sizeof(sSensorList) / sizeof(sSensorList[0]);
+    if (len < currentSize) {
+        LOGE("Pressure HAL:sensor list too small, len=%d", len);
+        return 0;
+    }
+    memcpy(list, sSensorList, sizeof(*list) * currentSize);
+    for (int i = 0; i < currentSize; ++i) {
+        this->fillList(&list[i]);
+    }
+
+    return currentSize;
 }
 
 /**
@@ -279,6 +314,7 @@ int CompassSensor::enable(int32_t handle, int en)
         LOGE("HAL:compass enable error %d", res);
     } else {
         mEnable = val;
+        mTimestamp = 0;
     }
 
     return res;
@@ -311,12 +347,13 @@ int CompassSensor::setDelay(int32_t handle, int64_t ns)
         LOGE("HAL:Compass error opening compass rate file");
     } else {
         mDelay = ns;
+        mTimestamp = 0;
     }
 
     return res;
 }
 
-void CompassSensor::getOrientationMatrix(int8_t *orient)
+void CompassSensor::getOrientationMatrix(signed char *orient)
 {
     VFUNC_LOG;
     memcpy(orient, mCompassOrientation, sizeof(mCompassOrientation));
@@ -330,22 +367,21 @@ void CompassSensor::getOrientationMatrix(int8_t *orient)
     @para[in]      timestamp data's timestamp
     @return        1, if 1   sample read, 0, if not, negative if error
  */
-int CompassSensor::readSample(int *data, int64_t *timestamp, int len) {
+int CompassSensor::readSample(int *data, int64_t *timestamp) {
     VFUNC_LOG;
-
-    (void)len;
 
     char *rdata = mIIOBuffer;
     int64_t raw;
     double sample;
     struct inv_iio_buffer_channel *channel;
     ssize_t address;
+#ifdef INV_HIFI_SUPPORT
+    const int64_t delay_min = mDelay * 98LL / 100LL;
+    const int64_t delay_max = mDelay * 102LL / 100LL;
+    int64_t delta;
+#endif
 
-    if (len < 3) {
-        return -EINVAL;
-    }
-
-    ssize_t size = read(compass_fd, rdata, compassBufferScan.size);
+    ssize_t size = read(dev_fd, rdata, compassBufferScan.size);
     if (size < 0) {
         return -errno;
     }
@@ -372,10 +408,24 @@ int CompassSensor::readSample(int *data, int64_t *timestamp, int len) {
             *timestamp = 0;
         } else {
             raw = inv_iio_buffer_channel_get_data(channel, &rdata[address]);
-            *timestamp = raw;
+#ifdef INV_HIFI_SUPPORT
+            if (mTimestamp != 0) {
+                delta = raw - mTimestamp;
+                if (delta > delay_max) {
+                    LOGV_IF(ENG_VERBOSE, "HAL:compass: delta timestamp truncated from %" PRId64 " to %" PRId64, delta, delay_max);
+                    delta = delay_max;
+                } else if (delta < delay_min) {
+                    LOGV_IF(ENG_VERBOSE, "HAL:compass: delta timestamp truncated from %" PRId64 " to %" PRId64, delta, delay_min);
+                    delta = delay_min;
+                }
+                mTimestamp += delta;
+            } else
+#endif
+            {
+                mTimestamp = raw;
+            }
+            *timestamp = mTimestamp;
         }
-        LOGV_IF(INPUT_DATA, "HAL:compass data : %d %d %d -- %" PRId64 "",
-                data[0], data[1], data[2], *timestamp);
     }
 
     return mEnable;
@@ -401,7 +451,7 @@ void CompassSensor::fillList(struct sensor_t *list)
     mMaxDelay = (int64_t)list->maxDelay * 1000LL;
 }
 
-int CompassSensor::initSysfsAttr(void)
+int CompassSensor::inv_init_sysfs_attributes(void)
 {
     VFUNC_LOG;
 

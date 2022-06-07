@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2019 InvenSense, Inc.
+ * Copyright (C) 2014-2020 InvenSense, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,30 +43,40 @@ struct sensors_event_t;
 class SensorBase {
 public:
     static bool PROCESS_VERBOSE;   /* process log messages */
+    static bool EXTRA_VERBOSE;     /* verbose log messages */
     static bool SYSFS_VERBOSE;     /* log sysfs interactions as cat/echo for
                                       repro purpose on a shell */
     static bool FUNC_ENTRY;        /* log entry in all one-time functions */
     static bool HANDLER_ENTRY;     /* log entry in all handler functions */
+    static bool ENG_VERBOSE;       /* log a lot more info about the internals */
     static bool INPUT_DATA;        /* log the data input from the events */
     static bool HANDLER_DATA;      /* log the data fetched from the handlers */
 
+    static int64_t getTimestamp();
+protected:
+    const char *dev_name;
+    const char *data_name;
+    char input_name[PATH_MAX];
+    int dev_fd;
+    int data_fd;
+
+    int openInput(const char* inputName);
+
+    int open_device();
+    int close_device();
 public:
-    SensorBase(void);
+    SensorBase(const char* dev_name, const char* data_name);
     virtual ~SensorBase();
-    virtual int readEvents(sensors_event_t* data, int count);
-    virtual int readSample(int *data, int64_t *timestamp, int len);
-    virtual int getFd(void) const;
+
+    virtual int readEvents(sensors_event_t* data, int count) = 0;
+    int readSample(int *data, int64_t *timestamp);
+    virtual int getFd() const;
     virtual int enable(int32_t handle, int enabled);
     virtual int batch(int handle, int flags, int64_t period_ns, int64_t timeout);
     virtual int flush(int handle);
-    virtual int setDelay(int handle, int64_t period_ns);
     virtual void getOrientationMatrix(int8_t *orient);
-
-protected:
-    int64_t getTimestamp(void);
-    virtual void enableIIOSysfs(void);
-    virtual int initSysfsAttr(void);
-
+    virtual int isSensorPresent(void);
+    virtual int populateSensorList(struct sensor_t *list, int len);
 };
 
 /*****************************************************************************/

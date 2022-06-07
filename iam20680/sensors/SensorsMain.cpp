@@ -86,12 +86,14 @@ private:
     enum {
         mpl = 0,
         compass,
+        pressure,
         numFds,
     };
 
     struct pollfd mPollFds[numFds];
     SensorBase *mSensor;
     CompassSensor *mCompassSensor;
+    PressureSensor *mPressureSensor;
 };
 
 /******************************************************************************/
@@ -104,7 +106,12 @@ sensors_poll_context_t::sensors_poll_context_t() {
 #else
     mCompassSensor = NULL;
 #endif
-    MPLSensor *mplSensor = new MPLSensor(mCompassSensor);
+#ifdef PRESSURE_SUPPORT
+    mPressureSensor = new PressureSensor();
+#else
+    mPressureSensor = NULL;
+#endif
+    MPLSensor *mplSensor = new MPLSensor(mCompassSensor, mPressureSensor);
 
     // populate the sensor list
     sensors =
@@ -119,25 +126,27 @@ sensors_poll_context_t::sensors_poll_context_t() {
         mPollFds[compass].fd = mCompassSensor->getFd();
         mPollFds[compass].events = POLLIN;
         mPollFds[compass].revents = 0;
+    } else {
+        mPollFds[compass].fd = -1;
+    }
+
+    if (mPressureSensor) {
+        mPollFds[pressure].fd = mPressureSensor->getFd();
+        mPollFds[pressure].events = POLLIN;
+        mPollFds[pressure].revents = 0;
+    } else {
+        mPollFds[pressure].fd = -1;
     }
 }
 
 sensors_poll_context_t::~sensors_poll_context_t() {
     FUNC_LOG;
-    int i, num;
-
-    if (mCompassSensor == NULL)
-        num = numFds - 1;
-    else
-        num = numFds;
 
     delete mSensor;
     if (mCompassSensor)
         delete mCompassSensor;
-
-    for (i = 0; i < num; i++) {
-        close(mPollFds[i].fd);
-    }
+    if (mPressureSensor)
+        delete mPressureSensor;
 }
 
 int sensors_poll_context_t::activate(int handle, int enabled) {
@@ -154,21 +163,15 @@ int sensors_poll_context_t::pollEvents(sensors_event_t *data, int count)
 
     int nbEvents = 0;
     int nb, polltime = -1;
-    int num;
-
-    if (mCompassSensor == NULL)
-        num = numFds - 1;
-    else
-        num = numFds;
 
     // look for new events
     do {
-        nb = poll(mPollFds, num, polltime);
+        nb = poll(mPollFds, numFds, polltime);
         LOGI_IF(0, "poll nb=%d, count=%d, pt=%d", nb, count, polltime);
         if (nb < 0)
             return -errno;
         if (nb > 0) {
-            for (int i = 0; count && i < num; i++) {
+            for (int i = 0; count && i < numFds; i++) {
                 if (mPollFds[i].revents & (POLLIN | POLLPRI)) {
                     nb = 0;
                     if (i == mpl) {
@@ -176,6 +179,9 @@ int sensors_poll_context_t::pollEvents(sensors_event_t *data, int count)
                         mPollFds[i].revents = 0;
                     } else if (i == compass) {
                         nb = ((MPLSensor*) mSensor)->readCompassEvents(data, count);
+                        mPollFds[i].revents = 0;
+                    } else if (i == pressure) {
+                        nb = ((MPLSensor*) mSensor)->readPressureEvents(data, count);
                         mPollFds[i].revents = 0;
                     }
                     if (nb > 0) {

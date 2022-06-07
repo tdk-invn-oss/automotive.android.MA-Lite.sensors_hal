@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2014-2017 The Android Open Source Project
- * Copyright (C) 2017-2018 InvenSense, Inc.
+ * Copyright (C) 2017-2020 InvenSense, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,8 +15,8 @@
  * limitations under the License.
  */
 
-#ifndef COMPASS_SENSOR_PRIMARY_H
-#define COMPASS_SENSOR_PRIMARY_H
+#ifndef COMPASS_SENSOR_H
+#define COMPASS_SENSOR_H
 
 #include <stdlib.h>
 #include <stdint.h>
@@ -29,26 +29,8 @@
 #define MAX_CHIP_ID_LEN (20)
 #define COMPASS_ON_PRIMARY "in_magn_x_raw"
 
-//COMPASS_ID_AK09911
-#define COMPASS_AKM9911_RANGE           (4912.f)
-#define COMPASS_AKM9911_RESOLUTION      (0.6f)
-#define COMPASS_AKM9911_POWER           (6.0f)  // IDD2 (max)
-#define COMPASS_AKM9911_MINDELAY        (20000)
-#define COMPASS_AKM9911_MAXDELAY        (200000)
+#define COMPASS_MAX_SYSFS_ATTRB         (int)(sizeof(struct sysfs_attrbs) / sizeof(char*))
 
-//COMPASS_ID_AK09915
-#define COMPASS_AKM9915_RANGE           (4912.f)
-#define COMPASS_AKM9915_RESOLUTION      (0.15f)
-#define COMPASS_AKM9915_POWER           (3.5f)  // IDD2 (max)
-#define COMPASS_AKM9915_MINDELAY        (20000)
-#define COMPASS_AKM9915_MAXDELAY        (200000)
-
-//COMPASS_ID_AK09916
-#define COMPASS_AKM9916_RANGE           (4912.f)
-#define COMPASS_AKM9916_RESOLUTION      (0.15f)
-#define COMPASS_AKM9916_POWER           (3.f)   // IDD2 (max)
-#define COMPASS_AKM9916_MINDELAY        (20000)
-#define COMPASS_AKM9916_MAXDELAY        (200000)
 
 class CompassSensor : public SensorBase {
 
@@ -56,22 +38,22 @@ public:
     CompassSensor();
     virtual ~CompassSensor();
 
-    virtual int readEvents(sensors_event_t* data, int count) { (void)data; (void)count; return 0; }
-    virtual int readSample(int *data, int64_t *timestamp, int len);
-    virtual int getFd() const;
     virtual int enable(int32_t handle, int enabled);
     virtual int batch(int handle, int flags, int64_t period_ns, int64_t timeout) { (void)handle; (void)flags; (void)period_ns; (void)timeout; return 0; }
     virtual int flush(int handle) {(void)handle; return 0;}
-    virtual int setDelay(int handle, int64_t period_ns);
-    virtual void getOrientationMatrix(int8_t *orient);
+    virtual int setDelay(int32_t handle, int64_t ns);
+    // unnecessary for MPL
+    virtual int readEvents(sensors_event_t *data, int count)
+        { (void)data; (void)count; return 0; }
 
+    int readSample(int *data, int64_t *timestamp);
     int providesCalibration() { return 0; }
+    void getOrientationMatrix(signed char *orient);
     int getAccuracy() { return 0; }
+    int isSensorPresent(void);
+    int populateSensorList(struct sensor_t *list, int len);
     void fillList(struct sensor_t *list);
 
-protected:
-    virtual void enableIIOSysfs(void);
-    virtual int initSysfsAttr(void);
 private:
     struct sysfs_attrbs {
        char *buffer_enable;
@@ -117,13 +99,15 @@ private:
 
     // implementation specific
     signed char mCompassOrientation[9];
-    int compass_fd;
     int mEnable;
     int64_t mDelay;
     int64_t mMinDelay;
     int64_t mMaxDelay;
-
+    int64_t mTimestamp;
     char mIIOBuffer[CHANNELS_NB * 8 * IIO_BUFFER_LENGTH];
+
+    void enable_iio_sysfs(void);
+    int inv_init_sysfs_attributes(void);
 };
 
 /*****************************************************************************/

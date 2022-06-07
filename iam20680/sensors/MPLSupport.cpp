@@ -49,7 +49,7 @@ int inv_read_data(char *fname, int *data)
     } else {
         count = sscanf(buf, "%d", data);
         if(count)
-            LOGV_IF(SensorBase::PROCESS_VERBOSE, "HAL:Data= %d", *data);
+            LOGV_IF(SensorBase::EXTRA_VERBOSE, "HAL:Data= %d", *data);
     }
     close(fd);
 
@@ -118,7 +118,7 @@ int write_attribute_sensor(int fd, int data)
             int err = errno;
             LOGE("HAL:write fd %d returned '%s' (%d)", fd, strerror(err), err);
         } else {
-            LOGV_IF(SensorBase::PROCESS_VERBOSE, "HAL:fd=%d write attribute to %d", fd, data);
+            LOGV_IF(SensorBase::EXTRA_VERBOSE, "HAL:fd=%d write attribute to %d", fd, data);
         }
         close(fd);
     }
@@ -138,7 +138,7 @@ int write_attribute_sensor(int fd, char* data)
             int err = errno;
             LOGE("HAL:write fd %d returned '%s' (%d)", fd, strerror(err), err);
         } else {
-            LOGV_IF(SensorBase::PROCESS_VERBOSE, "HAL:fd=%d write attribute to %s", fd, data);
+            LOGV_IF(SensorBase::EXTRA_VERBOSE, "HAL:fd=%d write attribute to %s", fd, data);
         }
         close(fd);
     }
@@ -161,7 +161,7 @@ int write_attribute_sensor_continuous(int fd, int data)
             int err = errno;
             LOGE("HAL:write fd %d returned '%s' (%d)", fd, strerror(err), err);
         } else {
-            LOGV_IF(SensorBase::PROCESS_VERBOSE, "HAL:fd=%d write attribute to %d", fd, data);
+            LOGV_IF(SensorBase::EXTRA_VERBOSE, "HAL:fd=%d write attribute to %d", fd, data);
         }
     }
 

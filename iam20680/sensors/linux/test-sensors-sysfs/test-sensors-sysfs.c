@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018-2019 InvenSense, Inc.
+ * Copyright (C) 2018-2020 InvenSense, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@
 #include <math.h>
 #include <string.h>
 
-#define VERSION_STR             "1.1.0"
+#define VERSION_STR             "1.1.1"
 #define USAGE_NOTE              ""
 
 #define IIO_BUFFER_LENGTH       32768
@@ -70,7 +70,7 @@ enum {
     ACCEL_FSR_4G = 1,
     ACCEL_FSR_8G = 2,
     ACCEL_FSR_16G = 3,
-    ACCEL_FSR_32G = 4       /* only for ICM42686 */
+    ACCEL_FSR_32G = 4       /* only for ICM42686, ICM40609D */
 };
 
 enum {
@@ -80,6 +80,10 @@ enum {
     GYRO_FSR_2000DPS = 3,
     GYRO_FSR_4000DPS = 4    /* only for ICM42686 */
 };
+
+/* update below for required FSR (except for FIFO high res mode chips) */
+#define DEFAULT_ACCEL_FSR    ACCEL_FSR_8G
+#define DEFAULT_GYRO_FSR     GYRO_FSR_2000DPS
 
 /* iio sysfs path */
 static char iio_sysfs_path[1024] = "";
@@ -654,9 +658,25 @@ int main(int argc, char *argv[])
     double accel_scale = 0;
     double gyro_scale = 0;
 
-    /* Update below for required FSR */
-    int accel_fsr = ACCEL_FSR_8G;
-    int gyro_fsr = GYRO_FSR_2000DPS;
+    int accel_fsr = DEFAULT_ACCEL_FSR;
+    int gyro_fsr = DEFAULT_GYRO_FSR;
+
+    /* Force FSR settings for FIFO high res chips */
+#ifdef FIFO_HIGH_RES_ENABLE
+
+#ifdef ACCEL_ENHANCED_FSR_SUPPORT
+    accel_fsr = ACCEL_FSR_32G;
+#else
+    accel_fsr = ACCEL_FSR_16G;
+#endif
+
+#ifdef GYRO_ENHANCED_FSR_SUPPORT
+    gyro_fsr = GYRO_FSR_4000DPS;
+#else
+    gyro_fsr = GYRO_FSR_2000DPS;
+#endif
+
+#endif
 
     while ((opt = getopt_long(argc, argv, "hd:a:g:cb:", options, &option_index)) != -1) {
         switch (opt) {
@@ -772,7 +792,7 @@ int main(int argc, char *argv[])
     }
 
     /* set FIFO high resolution mode */
-#ifdef HIGH_RES_MODE_ENABLE
+#ifdef FIFO_HIGH_RES_ENABLE
     printf(">Enable FIFO High resolution mode\n");
     write_sysfs_int(SYSFS_HIGH_RES_MODE, 1); // do not check error
 #else
@@ -809,7 +829,7 @@ int main(int argc, char *argv[])
         accel_prev_ts = get_current_timestamp();
         batched_sample_accel_nb = 0;
     }
-#ifdef HIGH_RES_MODE_ENABLE
+#ifdef FIFO_HIGH_RES_ENABLE
     accel_scale = (double)accel_fsr_gee / 524288.f * 9.80665f; // LSB(20bit) to m/s^2
 #else
     accel_scale = (double)accel_fsr_gee / 32768.f * 9.80665f; // LSB(16bit) to m/s^2
@@ -843,7 +863,7 @@ int main(int argc, char *argv[])
         gyro_prev_ts = get_current_timestamp();
         batched_sample_gyro_nb = 0;
     }
-#ifdef HIGH_RES_MODE_ENABLE
+#ifdef FIFO_HIGH_RES_ENABLE
     gyro_scale = (double)gyro_fsr_dps / 524288.f * M_PI / 180; // LSB(20bit) to rad/s
 #else
     gyro_scale = (double)gyro_fsr_dps / 32768.f * M_PI / 180; // LSB(16bit) to rad/s
