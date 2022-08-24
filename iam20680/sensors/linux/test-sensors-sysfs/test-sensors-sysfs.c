@@ -31,7 +31,7 @@
 #include <math.h>
 #include <string.h>
 
-#define VERSION_STR             "1.1.1"
+#define VERSION_STR             "1.2.0"
 #define USAGE_NOTE              ""
 
 #define IIO_BUFFER_LENGTH       32768
@@ -45,9 +45,9 @@
 #define SYSFS_CHIP_NAME         "name"
 #define SYSFS_CHIP_ENABLE       "buffer/enable"
 #define SYSFS_BUFFER_LENGTH     "buffer/length"
-#define SYSFS_TIMESTAMP_EN      "scan_elements/in_timestamp_en"
-#define SYSFS_TIMESTAMP_INDEX   "scan_elements/in_timestamp_index"
-#define SYSFS_TIMESTAMP_TYPE    "scan_elements/in_timestamp_type"
+#define SYSFS_SCAN_EL_EN      "scan_elements/in_accel_en"
+#define SYSFS_SCAN_EL_INDEX   "scan_elements/in_accel_index"
+#define SYSFS_SCAN_EL_TYPE    "scan_elements/in_accel_type"
 #define SYSFS_GYRO_ORIENT       "info_anglvel_matrix"
 #define SYSFS_GYRO_FIFO_ENABLE  "in_anglvel_enable"
 #define SYSFS_GYRO_FSR          "in_anglvel_scale"
@@ -295,8 +295,8 @@ static int setup_iio(void)
     if (ret)
         return ret;
 
-    /* timestamp en */
-    ret = write_sysfs_int(SYSFS_TIMESTAMP_EN, 1);
+    /* scan_elements en */
+    ret = write_sysfs_int(SYSFS_SCAN_EL_EN, 1);
     if (ret)
         return ret;
 
@@ -653,8 +653,8 @@ int main(int argc, char *argv[])
     unsigned long device_no = 0;
     bool convert = false;
     unsigned long batch_ms = 0;
-    int accel_fsr_gee;
-    int gyro_fsr_dps;
+    int accel_fsr_gee = 0;
+    int gyro_fsr_dps = 0;
     double accel_scale = 0;
     double gyro_scale = 0;
 
