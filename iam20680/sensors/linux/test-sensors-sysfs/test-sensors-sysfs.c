@@ -31,7 +31,7 @@
 #include <math.h>
 #include <string.h>
 
-#define VERSION_STR             "1.2.0"
+#define VERSION_STR             "1.2.1"
 #define USAGE_NOTE              ""
 
 #define IIO_BUFFER_LENGTH       32768
@@ -145,7 +145,7 @@ static int64_t get_current_timestamp(void)
 {
     struct timespec tp;
 
-    clock_gettime(CLOCK_MONOTONIC, &tp);
+    clock_gettime(CLOCK_BOOTTIME, &tp);
     return  (int64_t)tp.tv_sec * 1000000000LL + (int64_t)tp.tv_nsec;
 }
 
