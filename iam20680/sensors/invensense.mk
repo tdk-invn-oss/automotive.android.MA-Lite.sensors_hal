@@ -4,11 +4,11 @@ INV_INCLUDES :=
 INV_SRCS :=
 
 # Version
-INV_VERSION_MAJOR := 11
+INV_VERSION_MAJOR := 13
 INV_VERSION_MINOR := 1
 INV_VERSION_PATCH := 0
 INV_VERSION_SUFFIX := -simple
-$(info InvenSense version MA-$(INV_VERSION_MAJOR).$(INV_VERSION_MINOR).$(INV_VERSION_PATCH)$(INV_VERSION_SUFFIX))
+$(info InvenSense MA-Lite version $(INV_VERSION_MAJOR).$(INV_VERSION_MINOR).$(INV_VERSION_PATCH)$(INV_VERSION_SUFFIX))
 INV_CFLAGS += -DINV_VERSION_MAJOR=$(INV_VERSION_MAJOR)
 INV_CFLAGS += -DINV_VERSION_MINOR=$(INV_VERSION_MINOR)
 INV_CFLAGS += -DINV_VERSION_PATCH=$(INV_VERSION_PATCH)
@@ -16,16 +16,16 @@ INV_CFLAGS += -DINV_VERSION_SUFFIX=\"$(INV_VERSION_SUFFIX)\"
 
 # InvenSense chip type
 ifndef INVENSENSE_CHIP
-$(info missing INVENSENSE_CHIP, select from: iam20680, icm20602, icm20690, icm42600, icm42686, icm42688, icm40609d, icm43600)
-$(info Note: select icm42600 for icm40607, select icm43600 for icm42607 & icm42670)
+$(info missing INVENSENSE_CHIP, select from: iam20680, icm20602, icm20690, icm40609d, icm42600, icm42686, icm42688, icm43600)
+$(info Note: select icm42600 for icm40607/40608, select icm43600 for icm42607/42608/42670/42671)
 $(warning Using by default iam20680)
 INVENSENSE_CHIP := iam20680
 endif
 $(info InvenSense chip = $(INVENSENSE_CHIP))
 
-# Batch mode support
-ifeq (,$(filter $(INVENSENSE_CHIP), iam20680))
-INV_CFLAGS += -DBATCH_MODE_SUPPORT
+# Automotive gyro 250dps setting
+ifneq (,$(filter $(INVENSENSE_CHIP), iam20680))
+INV_CFLAGS += -DINV_GYRO_250DPS
 endif
 
 # ODR configuration according to chip type
@@ -50,7 +50,8 @@ INV_CFLAGS += -DFIFO_HIGH_RES_ENABLE
 endif
 
 # HiFi support
-ifneq (,$(filter $(INVENSENSE_CHIP), icm20602 icm20690 icm40609d icm42600 iim42600 icm42686 icm43600))
+ifneq (,$(filter $(INVENSENSE_CHIP), icm20602 icm20690 icm40609d icm42600 icm42686 icm42688 iim42600 icm43600))
+INV_CFLAGS += -DINV_HIFI_ACCEL_16G
 INV_CFLAGS += -DINV_HIFI_HIGH_ODR
 endif
 

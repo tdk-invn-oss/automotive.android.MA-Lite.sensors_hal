@@ -85,12 +85,6 @@
 #define ACCEL_ICM20690_MINDELAY          (5000)
 #define ACCEL_ICM20690_MINDELAY_HIFI     (2000)
 #define ACCEL_ICM20690_MAXDELAY          (250000)
-// ACCEL ICM20608D
-#define ACCEL_ICM20608D_RANGE            (2.f * GRAVITY_EARTH)
-#define ACCEL_ICM20608D_RESOLUTION       (2.f * GRAVITY_EARTH / 32768.f)
-#define ACCEL_ICM20608D_POWER            (0.5f)
-#define ACCEL_ICM20608D_MINDELAY         (5000)
-#define ACCEL_ICM20608D_MAXDELAY         (1000000)
 // ACCEL IAM20680
 #define ACCEL_IAM20680_RANGE             (2.f * GRAVITY_EARTH)
 #define ACCEL_IAM20680_RESOLUTION        (2.f * GRAVITY_EARTH / 32768.f)
@@ -134,12 +128,6 @@
 #define GYRO_ICM20690_MINDELAY           (5000)
 #define GYRO_ICM20690_MINDELAY_HIFI      (2000)
 #define GYRO_ICM20690_MAXDELAY           (250000)
-//GYRO ICM20608D
-#define GYRO_ICM20608D_RANGE             (2000.f * M_PI / 180.f)
-#define GYRO_ICM20608D_RESOLUTION        (2000.f * M_PI / (180.f * 32768.f))
-#define GYRO_ICM20608D_POWER             (3.5f)
-#define GYRO_ICM20608D_MINDELAY          (5000)
-#define GYRO_ICM20608D_MAXDELAY          (1000000)
 //GYRO IAM20680
 #define GYRO_IAM20680_RANGE              (2000.f * M_PI / 180.f)
 #define GYRO_IAM20680_RESOLUTION         (2000.f * M_PI / (180.f * 32768.f))
@@ -189,5 +177,15 @@
 #define PROXIMITY_APS9930_POWER                 (12.675f)
 #define PROXIMITY_APS9930_MINDELAY              (112000)
 #define PROXIMITY_APS9930_MAXDELAY              (1000000)
+
 /******************************************/
+// FIFO_SIZE
+#define FIFO_SIZE_COMPUTE(_sz)    ((_sz) * 7 / 10 / 6)
+#define FIFO_SIZE_IAM20680        512
+#define FIFO_SIZE_ICM20648        512
+#define FIFO_SIZE_ICM20602        1024
+#define FIFO_SIZE_ICM20690        1024
+#define FIFO_SIZE_ICM42600        2048
+#define FIFO_SIZE_ICM43600        1024
+
 #endif  /* INV_SENSOR_PARAMS_H */

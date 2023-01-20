@@ -45,13 +45,24 @@
 #define PRESSURE_MAXDELAY(_chip)         PRESSURE_##_chip##_MAXDELAY
 
 static const struct sensor_t sSensorList[] = {
-     {
-         "Invensense Pressure", "Invensense", 1,
-         SENSORS_PRESSURE_HANDLE, SENSOR_TYPE_PRESSURE,
-         1100.0f, 0.001f, 0.004f, 1000,
-         0, 90, "android.sensor.pressure", "", 256000,
-         SENSOR_FLAG_CONTINUOUS_MODE, {}
-     },
+    {
+        .name = "Invensense Pressure",
+        .vendor = "Invensense",
+        .version = 1,
+        .handle = SENSORS_PRESSURE_HANDLE,
+        .type = SENSOR_TYPE_PRESSURE,
+        .maxRange = 1100.0f,
+        .resolution = 0.001f,
+        .power = 0.004f,
+        .minDelay = 1000,
+        .fifoReservedEventCount = 0,
+        .fifoMaxEventCount = 0,
+        .stringType = SENSOR_STRING_TYPE_PRESSURE,
+        .requiredPermission = "",
+        .maxDelay = 256000,
+        .flags = SENSOR_FLAG_CONTINUOUS_MODE | SENSOR_FLAG_ADDITIONAL_INFO,
+        .reserved = {},
+    },
 };
 
 /******************************************************************************/
@@ -84,8 +95,8 @@ PressureSensor::PressureSensor() :
 
     // set measurement mode
     LOGV_IF(SYSFS_VERBOSE, "Pressure HAL:sysfs:echo %d > %s (%" PRId64 ")",
-            ICP101XX_MEASURE_MODE, mSysFs.mode, getTimestamp());
-    ret = write_sysfs_int(mSysFs.mode, ICP101XX_MEASURE_MODE);
+            ICP101XX_MEASURE_MODE, mSysFs[MODE], getTimestamp());
+    ret = write_sysfs_int(mSysFs[MODE], ICP101XX_MEASURE_MODE);
     LOGE_IF(ret != 0, "Pressure HAL:sysfs error setting measurement mode");
 
     enable(ID_PS, 0);
@@ -101,7 +112,7 @@ int PressureSensor::readCalibData()
     FILE *attr;
     int ret;
 
-    attr = fopen(mSysFs.calibdata, "r");
+    attr = fopen(mSysFs[CALIBDATA], "r");
     if (attr == NULL)
         return -1;
 
@@ -129,36 +140,36 @@ void PressureSensor::enableIIOSysfs()
 
     // enable pressure + temperature + timestamp into buffer
     LOGV_IF(SYSFS_VERBOSE, "Pressure HAL:sysfs:echo %d > %s (%" PRId64 ")",
-            1, mSysFs.pressure_enable, getTimestamp());
-    ret = write_sysfs_int(mSysFs.pressure_enable, 1);
+            1, mSysFs[PRESSURE_ENABLE], getTimestamp());
+    ret = write_sysfs_int(mSysFs[PRESSURE_ENABLE], 1);
     LOGE_IF(ret != 0, "Pressure HAL:sysfs error enabling iio buffer in_pressure");
     LOGV_IF(SYSFS_VERBOSE, "Pressure HAL:sysfs:echo %d > %s (%" PRId64 ")",
-            1, mSysFs.temp_enable, getTimestamp());
-    ret = write_sysfs_int(mSysFs.temp_enable, 1);
+            1, mSysFs[TEMP_ENABLE], getTimestamp());
+    ret = write_sysfs_int(mSysFs[TEMP_ENABLE], 1);
     LOGE_IF(ret != 0, "Pressure HAL:sysfs error enabling iio buffer in_temp");
     LOGV_IF(SYSFS_VERBOSE, "Pressure HAL:sysfs:echo %d > %s (%" PRId64 ")",
-            1, mSysFs.timestamp_enable, getTimestamp());
-    ret = write_sysfs_int(mSysFs.timestamp_enable, 1);
+            1, mSysFs[TIMESTAMP_ENABLE], getTimestamp());
+    ret = write_sysfs_int(mSysFs[TIMESTAMP_ENABLE], 1);
     LOGE_IF(ret != 0, "Pressure HAL:sysfs error enabling iio buffer in_timestamp");
 
     // scan iio buffer
-    inv_iio_buffer_scan_channel(mSysFs.pressure_enable,
-                                mSysFs.pressure_index,
-                                mSysFs.pressure_type,
-                                mSysFs.pressure_offset,
-                                mSysFs.pressure_scale,
+    inv_iio_buffer_scan_channel(mSysFs[PRESSURE_ENABLE],
+                                mSysFs[PRESSURE_INDEX],
+                                mSysFs[PRESSURE_TYPE],
+                                mSysFs[PRESSURE_OFFSET],
+                                mSysFs[PRESSURE_SCALE],
                                 &mBufferScan.channels[PRESSURE_CHANNEL]);
-    inv_iio_buffer_scan_channel(mSysFs.temp_enable,
-                                mSysFs.temp_index,
-                                mSysFs.temp_type,
-                                mSysFs.temp_offset,
-                                mSysFs.temp_scale,
+    inv_iio_buffer_scan_channel(mSysFs[TEMP_ENABLE],
+                                mSysFs[TEMP_INDEX],
+                                mSysFs[TEMP_TYPE],
+                                mSysFs[TEMP_OFFSET],
+                                mSysFs[TEMP_SCALE],
                                 &mBufferScan.channels[TEMP_CHANNEL]);
-    inv_iio_buffer_scan_channel(mSysFs.timestamp_enable,
-                                mSysFs.timestamp_index,
-                                mSysFs.timestamp_type,
-                                mSysFs.timestamp_offset,
-                                mSysFs.timestamp_scale,
+    inv_iio_buffer_scan_channel(mSysFs[TIMESTAMP_ENABLE],
+                                mSysFs[TIMESTAMP_INDEX],
+                                mSysFs[TIMESTAMP_TYPE],
+                                mSysFs[TIMESTAMP_OFFSET],
+                                mSysFs[TIMESTAMP_SCALE],
                                 &mBufferScan.channels[TIMESTAMP_CHANNEL]);
 
     // compute buffer size
@@ -203,8 +214,8 @@ void PressureSensor::enableIIOSysfs()
 
     // set buffer length
     LOGV_IF(SYSFS_VERBOSE, "Pressure HAL:sysfs:echo %d > %s (%" PRId64 ")",
-            IIO_BUFFER_LENGTH, mSysFs.buffer_length, getTimestamp());
-    ret = write_sysfs_int(mSysFs.buffer_length, IIO_BUFFER_LENGTH);
+            IIO_BUFFER_LENGTH, mSysFs[BUFFER_LENGTH], getTimestamp());
+    ret = write_sysfs_int(mSysFs[BUFFER_LENGTH], IIO_BUFFER_LENGTH);
     LOGE_IF(ret != 0, "Pressure HAL:sysfs error setting pressure buffer length");
 
     snprintf(iio_device_node, sizeof(iio_device_node), "/dev/iio:device%d",
@@ -225,9 +236,8 @@ PressureSensor::~PressureSensor()
 {
     VFUNC_LOG;
 
-    for (size_t i = 0; i < MAX_SYSFS_ATTRB; ++i) {
-        char *attr = (char *)&mSysFs + i;
-        free(attr);
+    for (int i = 0; i < SYSFS_ATTR_NB; ++i) {
+        free(mSysFs[i]);
     }
 }
 
@@ -302,8 +312,8 @@ int PressureSensor::enable(int32_t handle, int en)
     (void)handle;
 
     LOGV_IF(SYSFS_VERBOSE, "Pressure HAL:sysfs:echo %d > %s (%" PRId64 ")",
-            val, mSysFs.buffer_enable, getTimestamp());
-    res = write_sysfs_int(mSysFs.buffer_enable, val);
+            val, mSysFs[BUFFER_ENABLE], getTimestamp());
+    res = write_sysfs_int(mSysFs[BUFFER_ENABLE], val);
     if (res) {
         LOGE("Pressure HAL:enable error %d", res);
     } else {
@@ -333,8 +343,8 @@ int PressureSensor::setDelay(int32_t handle, int64_t ns)
     freq = 1000000000.0 / ns;
 
     LOGV_IF(SYSFS_VERBOSE, "Pressure HAL:sysfs:echo %u > %s (%" PRId64 ")",
-            freq, mSysFs.sampling_frequency, getTimestamp());
-    file = fopen(mSysFs.sampling_frequency, "w");
+            freq, mSysFs[SAMPLING_FREQUENCY], getTimestamp());
+    file = fopen(mSysFs[SAMPLING_FREQUENCY], "w");
     if (file == NULL) {
         LOGE("Pressure HAL:error opening sampling_frequency file");
         return -1;
@@ -439,103 +449,103 @@ int PressureSensor::inv_init_sysfs_attributes(void)
     }
 
     // fill sysfs attributes
-    ret = asprintf(&mSysFs.buffer_enable, "%s/buffer/enable", sysfs_path);
+    ret = asprintf(&mSysFs[BUFFER_ENABLE], "%s/buffer/enable", sysfs_path);
     if (ret == -1) {
         ret = -ENOMEM;
         goto error_free;
     }
-    ret = asprintf(&mSysFs.buffer_length, "%s/buffer/length", sysfs_path);
+    ret = asprintf(&mSysFs[BUFFER_LENGTH], "%s/buffer/length", sysfs_path);
     if (ret == -1) {
         ret = -ENOMEM;
         goto error_free;
     }
 
-    ret = asprintf(&mSysFs.pressure_enable, "%s/scan_elements/in_pressure_en", sysfs_path);
+    ret = asprintf(&mSysFs[PRESSURE_ENABLE], "%s/scan_elements/in_pressure_en", sysfs_path);
     if (ret == -1) {
         ret = -ENOMEM;
         goto error_free;
     }
-    ret = asprintf(&mSysFs.pressure_index, "%s/scan_elements/in_pressure_index", sysfs_path);
+    ret = asprintf(&mSysFs[PRESSURE_INDEX], "%s/scan_elements/in_pressure_index", sysfs_path);
     if (ret == -1) {
         ret = -ENOMEM;
         goto error_free;
     }
-    ret = asprintf(&mSysFs.pressure_type, "%s/scan_elements/in_pressure_type", sysfs_path);
+    ret = asprintf(&mSysFs[PRESSURE_TYPE], "%s/scan_elements/in_pressure_type", sysfs_path);
     if (ret == -1) {
         ret = -ENOMEM;
         goto error_free;
     }
-    ret = asprintf(&mSysFs.temp_enable, "%s/scan_elements/in_temp_en", sysfs_path);
+    ret = asprintf(&mSysFs[TEMP_ENABLE], "%s/scan_elements/in_temp_en", sysfs_path);
     if (ret == -1) {
         ret = -ENOMEM;
         goto error_free;
     }
-    ret = asprintf(&mSysFs.temp_index, "%s/scan_elements/in_temp_index", sysfs_path);
+    ret = asprintf(&mSysFs[TEMP_INDEX], "%s/scan_elements/in_temp_index", sysfs_path);
     if (ret == -1) {
         ret = -ENOMEM;
         goto error_free;
     }
-    ret = asprintf(&mSysFs.temp_type, "%s/scan_elements/in_temp_type", sysfs_path);
+    ret = asprintf(&mSysFs[TEMP_TYPE], "%s/scan_elements/in_temp_type", sysfs_path);
     if (ret == -1) {
         ret = -ENOMEM;
         goto error_free;
     }
-    ret = asprintf(&mSysFs.timestamp_enable, "%s/scan_elements/in_timestamp_en", sysfs_path);
+    ret = asprintf(&mSysFs[TIMESTAMP_ENABLE], "%s/scan_elements/in_timestamp_en", sysfs_path);
     if (ret == -1) {
         ret = -ENOMEM;
         goto error_free;
     }
-    ret = asprintf(&mSysFs.timestamp_index, "%s/scan_elements/in_timestamp_index", sysfs_path);
+    ret = asprintf(&mSysFs[TIMESTAMP_INDEX], "%s/scan_elements/in_timestamp_index", sysfs_path);
     if (ret == -1) {
         ret = -ENOMEM;
         goto error_free;
     }
-    ret = asprintf(&mSysFs.timestamp_type, "%s/scan_elements/in_timestamp_type", sysfs_path);
+    ret = asprintf(&mSysFs[TIMESTAMP_TYPE], "%s/scan_elements/in_timestamp_type", sysfs_path);
     if (ret == -1) {
         ret = -ENOMEM;
         goto error_free;
     }
-    ret = asprintf(&mSysFs.sampling_frequency, "%s/sampling_frequency", sysfs_path);
+    ret = asprintf(&mSysFs[SAMPLING_FREQUENCY], "%s/sampling_frequency", sysfs_path);
     if (ret == -1) {
         ret = -ENOMEM;
         goto error_free;
     }
-    ret = asprintf(&mSysFs.pressure_scale, "%s/in_pressure_scale", sysfs_path);
+    ret = asprintf(&mSysFs[PRESSURE_SCALE], "%s/in_pressure_scale", sysfs_path);
     if (ret == -1) {
         ret = -ENOMEM;
         goto error_free;
     }
-    ret = asprintf(&mSysFs.pressure_offset, "%s/in_pressure_offset", sysfs_path);
+    ret = asprintf(&mSysFs[PRESSURE_OFFSET], "%s/in_pressure_offset", sysfs_path);
     if (ret == -1) {
         ret = -ENOMEM;
         goto error_free;
     }
-    ret = asprintf(&mSysFs.temp_scale, "%s/in_temp_scale", sysfs_path);
+    ret = asprintf(&mSysFs[TEMP_SCALE], "%s/in_temp_scale", sysfs_path);
     if (ret == -1) {
         ret = -ENOMEM;
         goto error_free;
     }
-    ret = asprintf(&mSysFs.temp_offset, "%s/in_temp_offset", sysfs_path);
+    ret = asprintf(&mSysFs[TEMP_OFFSET], "%s/in_temp_offset", sysfs_path);
     if (ret == -1) {
         ret = -ENOMEM;
         goto error_free;
     }
-    ret = asprintf(&mSysFs.timestamp_scale, "%s/in_timestamp_scale", sysfs_path);
+    ret = asprintf(&mSysFs[TIMESTAMP_SCALE], "%s/in_timestamp_scale", sysfs_path);
     if (ret == -1) {
         ret = -ENOMEM;
         goto error_free;
     }
-    ret = asprintf(&mSysFs.timestamp_offset, "%s/in_timestamp_offset", sysfs_path);
+    ret = asprintf(&mSysFs[TIMESTAMP_OFFSET], "%s/in_timestamp_offset", sysfs_path);
     if (ret == -1) {
         ret = -ENOMEM;
         goto error_free;
     }
-    ret = asprintf(&mSysFs.mode, "%s/mode", sysfs_path);
+    ret = asprintf(&mSysFs[MODE], "%s/mode", sysfs_path);
     if (ret == -1) {
         ret = -ENOMEM;
         goto error_free;
     }
-    ret = asprintf(&mSysFs.calibdata, "%s/calibdata", sysfs_path);
+    ret = asprintf(&mSysFs[CALIBDATA], "%s/calibdata", sysfs_path);
     if (ret == -1) {
         ret = -ENOMEM;
         goto error_free;
@@ -545,9 +555,8 @@ int PressureSensor::inv_init_sysfs_attributes(void)
     return 0;
 
 error_free:
-    for (size_t i = 0; i < MAX_SYSFS_ATTRB; ++i) {
-        char *attr = (char *)&mSysFs + i;
-        free(attr);
+    for (int i = 0; i < SYSFS_ATTR_NB; ++i) {
+        free(mSysFs[i]);
     }
     free(sysfs_path);
     return ret;

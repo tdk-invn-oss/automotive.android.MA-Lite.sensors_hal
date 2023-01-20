@@ -12,7 +12,7 @@ CXX_STL = -lstdc++
 endif
 
 # Common flags
-CPPFLAGS += -DLOG_TAG=\"Sensors\"
+CPPFLAGS += -DLOG_TAG=\"InvnSensors\"
 CPPFLAGS += -Iandroid_linux -D_HW_DONT_INCLUDE_CORE_
 CPPFLAGS += $(foreach inc, $(INV_INCLUDES), -I$(HAL_SRC_DIR)/$(inc))
 COMMON_FLAGS += -O2

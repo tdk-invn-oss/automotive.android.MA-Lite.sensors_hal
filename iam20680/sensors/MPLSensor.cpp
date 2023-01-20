@@ -46,19 +46,29 @@
 
 /* Set default accel and gyro FSR (use enhanced FSR if available) */
 #ifdef ACCEL_ENHANCED_FSR_SUPPORT
-#define DEFAULT_ACCEL_FSR        32.0f    // 32g
-#define DEFAULT_ACCEL_FSR_SYSFS  4        // 0:2g, 1:4g, 2:8g, 3:16g, 4:32g
+#  define DEFAULT_ACCEL_FSR        32.0f     // 32g
+#  define DEFAULT_ACCEL_FSR_SYSFS  4         // 0:2g, 1:4g, 2:8g, 3:16g, 4:32g
 #else
-#define DEFAULT_ACCEL_FSR        8.0f    // 8g
-#define DEFAULT_ACCEL_FSR_SYSFS  2       // 0:2g, 1:4g, 2:8g, 3:16g, 4:32g
+#  ifdef INV_HIFI_ACCEL_16G
+#    define DEFAULT_ACCEL_FSR        16.0f   // 16g
+#    define DEFAULT_ACCEL_FSR_SYSFS  3       // 0:2g, 1:4g, 2:8g, 3:16g, 4:32g
+#  else
+#    define DEFAULT_ACCEL_FSR        8.0f    // 8g
+#    define DEFAULT_ACCEL_FSR_SYSFS  2       // 0:2g, 1:4g, 2:8g, 3:16g, 4:32g
+#  endif
 #endif
 
 #ifdef GYRO_ENHANCED_FSR_SUPPORT
-#define DEFAULT_GYRO_FSR         4000.0f // 4000dps
-#define DEFAULT_GYRO_FSR_SYSFS   4       // 0:250dps, 1:500dps, 2:1000dps, 3:2000dps, 4:4000dps
+#  define DEFAULT_GYRO_FSR         4000.0f   // 4000dps
+#  define DEFAULT_GYRO_FSR_SYSFS   4         // 0:250dps, 1:500dps, 2:1000dps, 3:2000dps, 4:4000dps
 #else
-#define DEFAULT_GYRO_FSR         2000.0f // 2000dps
-#define DEFAULT_GYRO_FSR_SYSFS   3       // 0:250dps, 1:500dps, 2:1000dps, 3:2000dps, 4:4000dps
+#  ifdef INV_GYRO_250DPS
+#    define DEFAULT_GYRO_FSR         250.0f // 250dps
+#    define DEFAULT_GYRO_FSR_SYSFS   0       // 0:250dps, 1:500dps, 2:1000dps, 3:2000dps, 4:4000dps
+#  else
+#    define DEFAULT_GYRO_FSR         2000.0f // 2000dps
+#    define DEFAULT_GYRO_FSR_SYSFS   3       // 0:250dps, 1:500dps, 2:1000dps, 3:2000dps, 4:4000dps
+#  endif
 #endif
 
 /* Force fixed full FSR for FIFO high resolution */
@@ -102,46 +112,64 @@
 #define MAX_LSB_DATA    32768.0f    // 2^15
 #endif
 
+/* Set Chip temperature reporting period */
+#define INV_CHIP_TEMPERATURE_REPORT_PERIOD_MS    100
+
 /*******************************************************************************
  * MPLSensor class implementation
  ******************************************************************************/
-#ifdef BATCH_MODE_SUPPORT
 static struct sensor_t sRawSensorList[] =
 {
-    {"Invensense Gyroscope Uncalibrated", "Invensense", 1,
-     SENSORS_RAW_GYROSCOPE_HANDLE,
-     SENSOR_TYPE_GYROSCOPE_UNCALIBRATED, GYRO_FSR * M_PI / 180.0f, GYRO_FSR * M_PI / (180.0f * MAX_LSB_DATA), 3.0f, 5000, 0, 512 * 7 / 10 / 6,
-     "android.sensor.gyroscope_uncalibrated", "", MAX_DELAY_US, SENSOR_FLAG_CONTINUOUS_MODE, {}},
-    {"Invensense Accelerometer", "Invensense", 1,
-     SENSORS_ACCELERATION_HANDLE,
-     SENSOR_TYPE_ACCELEROMETER, GRAVITY_EARTH * ACCEL_FSR, GRAVITY_EARTH * ACCEL_FSR / MAX_LSB_DATA, 0.4f, 5000, 0, 512 * 7 / 10 / 6,
-     "android.sensor.accelerometer", "", MAX_DELAY_US, SENSOR_FLAG_CONTINUOUS_MODE, {}},
+    {
+        .name = "Invensense Gyroscope",
+        .vendor = "Invensense",
+        .version = 1,
+        .handle = SENSORS_GYROSCOPE_HANDLE,
+        .type = SENSOR_TYPE_GYROSCOPE,
+        .maxRange = GYRO_FSR * M_PI / 180.0f,
+        .resolution = GYRO_FSR * M_PI / (180.0f * MAX_LSB_DATA),
+        .power = 3.0f,
+        .minDelay = 5000,
+        .fifoReservedEventCount = 0,
+        .fifoMaxEventCount = 0,
+        .stringType = SENSOR_STRING_TYPE_GYROSCOPE,
+        .requiredPermission = "",
+        .maxDelay = MAX_DELAY_US,
+        .flags = SENSOR_FLAG_CONTINUOUS_MODE | SENSOR_FLAG_ADDITIONAL_INFO,
+        .reserved = {},
+    },
+    {
+        .name = "Invensense Accelerometer",
+        .vendor = "Invensense",
+        .version = 1,
+        .handle = SENSORS_ACCELERATION_HANDLE,
+        .type = SENSOR_TYPE_ACCELEROMETER,
+        .maxRange = GRAVITY_EARTH * ACCEL_FSR,
+        .resolution = GRAVITY_EARTH * ACCEL_FSR / MAX_LSB_DATA,
+        .power = 0.4f,
+        .minDelay = 5000,
+        .fifoReservedEventCount = 0,
+        .fifoMaxEventCount = 0,
+        .stringType = SENSOR_STRING_TYPE_ACCELEROMETER,
+        .requiredPermission = "",
+        .maxDelay = MAX_DELAY_US,
+        .flags = SENSOR_FLAG_CONTINUOUS_MODE | SENSOR_FLAG_ADDITIONAL_INFO,
+        .reserved = {}
+    },
 };
-#else
-static struct sensor_t sRawSensorList[] =
-{
-    {"Invensense Gyroscope Uncalibrated", "Invensense", 1,
-     SENSORS_RAW_GYROSCOPE_HANDLE,
-     SENSOR_TYPE_GYROSCOPE_UNCALIBRATED, GYRO_FSR * M_PI / 180.0f, GYRO_FSR * M_PI / (180.0f * MAX_LSB_DATA), 3.0f, 5000, 0, 0,
-     "android.sensor.gyroscope_uncalibrated", "", MAX_DELAY_US, SENSOR_FLAG_CONTINUOUS_MODE, {}},
-    {"Invensense Accelerometer", "Invensense", 1,
-     SENSORS_ACCELERATION_HANDLE,
-     SENSOR_TYPE_ACCELEROMETER, GRAVITY_EARTH * ACCEL_FSR, GRAVITY_EARTH * ACCEL_FSR / MAX_LSB_DATA, 0.4f, 5000, 0, 0,
-     "android.sensor.accelerometer", "", MAX_DELAY_US, SENSOR_FLAG_CONTINUOUS_MODE, {}},
-};
-#endif
 
 MPLSensor::MPLSensor(CompassSensor *compass, PressureSensor *pressure)
     : SensorBase(NULL, NULL),
     mEnabled(0),
     iio_fd(-1),
+    chip_temperature_fd(-1),
     mIIOReadSize(0),
     mPollTime(-1),
     mGyroSensorPrevTimestamp(0),
     mAccelSensorPrevTimestamp(0),
     mCompassPrevTimestamp(0),
-    mPressurePrevTimestamp(0){
-
+    mPressurePrevTimestamp(0)
+{
     VFUNC_LOG;
 
     mCompassSensor = compass;
@@ -154,17 +182,20 @@ MPLSensor::MPLSensor(CompassSensor *compass, PressureSensor *pressure)
     memset(mGyroOrientationMatrix, 0, sizeof(mGyroOrientationMatrix));
     memset(mAccelOrientationMatrix, 0, sizeof(mAccelOrientationMatrix));
     memset(mCompassOrientationMatrix, 0, sizeof(mCompassOrientationMatrix));
-    mFlushSensorEnabledVector.resize(TotalNumSensors);
+    memset(mGyroLocation, 0, sizeof(mGyroLocation));
+    memset(mAccelLocation, 0, sizeof(mAccelLocation));
+    memset(mCompassLocation, 0, sizeof(mCompassLocation));
+    memset(mPressureLocation, 0, sizeof(mPressureLocation));
+    mFlushSensorEnabledVector.reserve(TotalNumSensors);
     memset(mEnabledTime, 0, sizeof(mEnabledTime));
-#ifdef BATCH_MODE_SUPPORT
     mBatchEnabled = 0;
     for (int i = 0; i < TotalNumSensors; i++)
         mBatchTimeouts[i] = 100000000000LL;
     mBatchTimeoutInMs = 0;
-#endif
+    memset(mChipTemperatureTimestamp, 0, sizeof(mChipTemperatureTimestamp));
 
     /* setup sysfs paths */
-	inv_init_sysfs_attributes();
+    inv_init_sysfs_attributes();
 
     /* get chip name */
     if (inv_get_chip_name(chip_ID) != INV_SUCCESS) {
@@ -176,14 +207,9 @@ MPLSensor::MPLSensor(CompassSensor *compass, PressureSensor *pressure)
     }
 
     /* print software version string */
-    LOGI("InvenSense Sensors HAL version MA-%d.%d.%d%s\n",
+    LOGI("InvenSense MA-Lite Sensors HAL version %d.%d.%d%s\n",
          INV_SENSORS_HAL_VERSION_MAJOR, INV_SENSORS_HAL_VERSION_MINOR,
          INV_SENSORS_HAL_VERSION_PATCH, INV_SENSORS_HAL_VERSION_SUFFIX);
-#ifdef BATCH_MODE_SUPPORT
-    LOGI("HAL:Batch mode support : yes\n");
-#else
-    LOGI("HAL:Batch mode support : no\n");
-#endif
 
     /* enable iio */
     enable_iio_sysfs();
@@ -191,30 +217,36 @@ MPLSensor::MPLSensor(CompassSensor *compass, PressureSensor *pressure)
     /* setup orientation matrix */
     inv_set_device_properties();
 
+    /* open temperature fd */
+    chip_temperature_fd = open(mpu.chip_temperature, O_RDONLY);
+    if (chip_temperature_fd == -1) {
+        LOGE("HAL: could not open temperature node [%s], error %d", mpu.chip_temperature, errno);
+    }
+
     /* initialize sensor data */
     memset(mPendingEvents, 0, sizeof(mPendingEvents));
-    mPendingEvents[RawGyro].version = sizeof(sensors_event_t);
-    mPendingEvents[RawGyro].sensor = ID_RG;
-    mPendingEvents[RawGyro].type = SENSOR_TYPE_GYROSCOPE_UNCALIBRATED;
-    mPendingEvents[RawGyro].gyro.status = SENSOR_STATUS_UNRELIABLE;
+    mPendingEvents[Gyro].version = sizeof(sensors_event_t);
+    mPendingEvents[Gyro].sensor = ID_G;
+    mPendingEvents[Gyro].type = SENSOR_TYPE_GYROSCOPE;
+    mPendingEvents[Gyro].gyro.status = SENSOR_STATUS_UNRELIABLE;
     mPendingEvents[Accelerometer].version = sizeof(sensors_event_t);
     mPendingEvents[Accelerometer].sensor = ID_A;
     mPendingEvents[Accelerometer].type = SENSOR_TYPE_ACCELEROMETER;
     mPendingEvents[Accelerometer].acceleration.status
         = SENSOR_STATUS_UNRELIABLE;
-    mPendingEvents[RawMagneticField].version = sizeof(sensors_event_t);
-    mPendingEvents[RawMagneticField].sensor = ID_RM;
-    mPendingEvents[RawMagneticField].type = SENSOR_TYPE_MAGNETIC_FIELD_UNCALIBRATED;
-    mPendingEvents[RawMagneticField].magnetic.status =
+    mPendingEvents[MagneticField].version = sizeof(sensors_event_t);
+    mPendingEvents[MagneticField].sensor = ID_M;
+    mPendingEvents[MagneticField].type = SENSOR_TYPE_MAGNETIC_FIELD;
+    mPendingEvents[MagneticField].magnetic.status =
         SENSOR_STATUS_UNRELIABLE;
     mPendingEvents[Pressure].version = sizeof(sensors_event_t);
     mPendingEvents[Pressure].sensor = ID_PS;
     mPendingEvents[Pressure].type = SENSOR_TYPE_PRESSURE;
 
     /* Event Handlers */
-    mHandlers[RawGyro] = &MPLSensor::rawGyroHandler;
+    mHandlers[Gyro] = &MPLSensor::gyroHandler;
     mHandlers[Accelerometer] = &MPLSensor::accelHandler;
-    mHandlers[RawMagneticField] = &MPLSensor::rawCompassHandler;
+    mHandlers[MagneticField] = &MPLSensor::compassHandler;
     mHandlers[Pressure] = &MPLSensor::psHandler;
 
     /* initialize delays to reasonable values */
@@ -245,10 +277,8 @@ MPLSensor::MPLSensor(CompassSensor *compass, PressureSensor *pressure)
     write_sysfs_int(mpu.gyro_fsr, GYRO_FSR_SYSFS);
     read_sysfs_int(mpu.gyro_fsr, &mGyroFsrDps); /* read actual fsr */
 
-#ifdef BATCH_MODE_SUPPORT
     /* reset batch timeout */
     setBatchTimeout(0);
-#endif
 }
 
 void MPLSensor::enable_iio_sysfs(void)
@@ -392,6 +422,12 @@ void MPLSensor::inv_get_sensors_orientation(void)
         }
         fclose(fptr);
     }
+
+    // Fill sensors location here if needed
+    // mGyroLocation = {0, 0, 0};
+    // mAccelLocation = {0, 0, 0};
+    // mCompassLocation = {0, 0, 0};
+    // mPressureLocation = {0, 0, 0};
 }
 
 MPLSensor::~MPLSensor()
@@ -425,7 +461,7 @@ void MPLSensor::setAccelRate(uint64_t delay)
 void MPLSensor::setMagRate(uint64_t delay)
 {
     if (mCompassSensor)
-        mCompassSensor->setDelay(ID_RM, delay);
+        mCompassSensor->setDelay(ID_M, delay);
 }
 
 void MPLSensor::setPressureRate(uint64_t delay)
@@ -467,7 +503,7 @@ int MPLSensor::enableCompass(int en)
     int res = 0;
 
     if (mCompassSensor)
-        res = mCompassSensor->enable(ID_RM, en);
+        res = mCompassSensor->enable(ID_M, en);
 
     return res;
 }
@@ -501,10 +537,8 @@ int MPLSensor::enable(int32_t handle, int en)
         LOGV_IF(ENG_VERBOSE, "HAL:can't find handle %d",handle);
         return -EINVAL;
     }
-#ifdef BATCH_MODE_SUPPORT
     if (!en)
         mBatchEnabled &= ~(1LL << what);
-#endif
     if (mEnabled == 0) {
         // reset buffer
         mIIOReadSize = 0;
@@ -523,6 +557,12 @@ int MPLSensor::enable(int32_t handle, int en)
             sname.c_str(),
             what);
 
+    if (en) {
+        pthread_mutex_lock(&mHALMutex);
+        mAdditionalInfoEnabledVector.push_back(handle);
+        pthread_mutex_unlock(&mHALMutex);
+    }
+
     if (((newState) << what) != (mEnabled & (1LL << what))) {
         uint64_t flags = newState;
 
@@ -530,13 +570,13 @@ int MPLSensor::enable(int32_t handle, int en)
         mEnabled |= (uint64_t(flags) << what);
 
         switch (what) {
-            case RawGyro:
+            case Gyro:
                 enableGyro(en);
                 break;
             case Accelerometer:
                 enableAccel(en);
                 break;
-            case RawMagneticField:
+            case MagneticField:
                 enableCompass(en);
                 break;
             case Pressure:
@@ -549,14 +589,11 @@ int MPLSensor::enable(int32_t handle, int en)
             mEnabledTime[what] = 0;
     }
 
-#ifdef BATCH_MODE_SUPPORT
     updateBatchTimeout();
-#endif
 
     return err;
 }
 
-#ifdef BATCH_MODE_SUPPORT
 void MPLSensor::setBatchTimeout(int64_t timeout_ns)
 {
     int timeout_ms = (int)(timeout_ns / 1000000LL);
@@ -589,30 +626,22 @@ void MPLSensor::updateBatchTimeout(void)
         setBatchTimeout(batchingTimeout);
     }
 }
-#endif
-
-
 
 /*  these handlers transform mpl data into one of the Android sensor types */
-int MPLSensor::rawGyroHandler(sensors_event_t* s)
+int MPLSensor::gyroHandler(sensors_event_t* s)
 {
     VHANDLER_LOG;
 
     int update = 0;
     int data[3];
-    int i;
-    float scale = (float)mGyroFsrDps / MAX_LSB_DATA * M_PI / 180;
+    const float scale = (float)mGyroFsrDps / MAX_LSB_DATA * M_PI / 180;
 
     /* convert to body frame */
-    for (i = 0; i < 3 ; i++) {
+    for (unsigned int i = 0; i < 3; i++) {
         data[i] = mCachedGyroData[0] * mGyroOrientationMatrix[i * 3] +
                   mCachedGyroData[1] * mGyroOrientationMatrix[i * 3 + 1] +
                   mCachedGyroData[2] * mGyroOrientationMatrix[i * 3 + 2];
-    }
-
-    for (i = 0; i < 3 ; i++) {
-        s->uncalibrated_gyro.uncalib[i] = (float)data[i] * scale;
-        s->uncalibrated_gyro.bias[i] = 0;
+        s->gyro.v[i] = (float)data[i] * scale;
     }
 
     s->timestamp = mGyroSensorTimestamp;
@@ -620,15 +649,14 @@ int MPLSensor::rawGyroHandler(sensors_event_t* s)
 
     /* timestamp check */
     if ((mGyroSensorTimestamp > mGyroSensorPrevTimestamp) &&
-        (mGyroSensorTimestamp > mEnabledTime[RawGyro])) {
+        (mGyroSensorTimestamp > mEnabledTime[Gyro])) {
         update = 1;
     }
 
     mGyroSensorPrevTimestamp = mGyroSensorTimestamp;
 
-    LOGV_IF(HANDLER_DATA, "HAL:raw gyro data : %+f %+f %+f -- %" PRId64 " - %d",
-        s->uncalibrated_gyro.uncalib[0], s->uncalibrated_gyro.uncalib[1], s->uncalibrated_gyro.uncalib[2],
-        s->timestamp, update);
+    LOGV_IF(HANDLER_DATA, "HAL:gyro data : %+f %+f %+f -- %" PRId64 " - %d",
+        s->gyro.x, s->gyro.y, s->gyro.z, s->timestamp, update);
 
     return update;
 }
@@ -639,22 +667,20 @@ int MPLSensor::accelHandler(sensors_event_t* s)
 
     int update = 0;
     int data[3];
-    int i;
-    float scale = 1.f / (MAX_LSB_DATA / (float)mAccelFsrGee) * 9.80665f;
+    const float scale = 1.f / (MAX_LSB_DATA / (float)mAccelFsrGee) * 9.80665f;
 
     /* convert to body frame */
-    for (i = 0; i < 3 ; i++) {
+    for (unsigned int i = 0; i < 3; i++) {
         data[i] = mCachedAccelData[0] * mAccelOrientationMatrix[i * 3] +
                   mCachedAccelData[1] * mAccelOrientationMatrix[i * 3 + 1] +
                   mCachedAccelData[2] * mAccelOrientationMatrix[i * 3 + 2];
-    }
-    for (i = 0; i < 3 ; i++) {
         s->acceleration.v[i] = (float)data[i] * scale;
     }
+
     s->timestamp = mAccelSensorTimestamp;
     s->acceleration.status = SENSOR_STATUS_UNRELIABLE;
 
-    /*timestamp check */
+    /* timestamp check */
     if ((mAccelSensorTimestamp > mAccelSensorPrevTimestamp) &&
         (mAccelSensorTimestamp > mEnabledTime[Accelerometer])) {
         update = 1;
@@ -663,31 +689,26 @@ int MPLSensor::accelHandler(sensors_event_t* s)
     mAccelSensorPrevTimestamp = mAccelSensorTimestamp;
 
     LOGV_IF(HANDLER_DATA, "HAL:accel data : %+f %+f %+f -- %" PRId64 " - %d",
-        s->acceleration.v[0], s->acceleration.v[1], s->acceleration.v[2],
+        s->acceleration.x, s->acceleration.y, s->acceleration.z,
         s->timestamp, update);
 
     return update;
 }
 
-int MPLSensor::rawCompassHandler(sensors_event_t* s)
+int MPLSensor::compassHandler(sensors_event_t* s)
 {
     VHANDLER_LOG;
 
     int update = 0;
     int data[3];
-    int i;
-    float scale = 1.f / (1 << 16); // 1uT for 2^16
+    const float scale = 1.f / (1 << 16); // 1uT for 2^16
 
     /* convert to body frame */
-    for (i = 0; i < 3 ; i++) {
+    for (unsigned int i = 0; i < 3 ; i++) {
         data[i] = (mCachedCompassData[0]) * mCompassOrientationMatrix[i * 3] +
                   (mCachedCompassData[1]) * mCompassOrientationMatrix[i * 3 + 1] +
                   (mCachedCompassData[2]) * mCompassOrientationMatrix[i * 3 + 2];
-    }
-
-    for (i = 0; i < 3 ; i++) {
-        s->uncalibrated_magnetic.uncalib[i] = (float)data[i] * scale;
-        s->uncalibrated_magnetic.bias[i] = 0;
+        s->magnetic.v[i] = (float)data[i] * scale;
     }
 
     s->timestamp = mCompassTimestamp;
@@ -695,14 +716,14 @@ int MPLSensor::rawCompassHandler(sensors_event_t* s)
 
     /* timestamp check */
     if ((mCompassTimestamp > mCompassPrevTimestamp) &&
-        (mCompassTimestamp > mEnabledTime[RawMagneticField])) {
+        (mCompassTimestamp > mEnabledTime[MagneticField])) {
         update = 1;
     }
 
     mCompassPrevTimestamp = mCompassTimestamp;
 
     LOGV_IF(HANDLER_DATA, "HAL:raw compass data: %+f %+f %+f %d -- %" PRId64 " - %d",
-        s->uncalibrated_magnetic.uncalib[0], s->uncalibrated_magnetic.uncalib[1], s->uncalibrated_magnetic.uncalib[2],
+        s->magnetic.x, s->magnetic.y, s->magnetic.z,
         s->magnetic.status, s->timestamp, update);
 
     return update;
@@ -732,7 +753,7 @@ int MPLSensor::psHandler(sensors_event_t* s)
     return update;
 }
 
-int MPLSensor::metaHandler(sensors_event_t* s, int flags)
+int MPLSensor::metaHandler(int sensor, sensors_event_t* s, int flags)
 {
     VHANDLER_LOG;
     int update = 1;
@@ -747,11 +768,8 @@ int MPLSensor::metaHandler(sensors_event_t* s, int flags)
         case META_DATA_FLUSH_COMPLETE:
             s->type = SENSOR_TYPE_META_DATA;
             s->meta_data.what = flags;
-            s->meta_data.sensor = mFlushSensorEnabledVector[0];
+            s->meta_data.sensor = sensor;
 
-            pthread_mutex_lock(&mHALMutex);
-            mFlushSensorEnabledVector.erase(mFlushSensorEnabledVector.begin());
-            pthread_mutex_unlock(&mHALMutex);
             LOGV_IF(HANDLER_DATA,
                     "HAL:flush complete data: type=%d what=%d, "
                     "sensor=%d - %" PRId64 " - %d",
@@ -767,6 +785,200 @@ int MPLSensor::metaHandler(sensors_event_t* s, int flags)
     return update;
 }
 
+// Sensor Placement event
+int MPLSensor::additionalInfoSensorPlacement(int handle, unsigned int seq, sensors_event_t* event)
+{
+    static const signed char identityOrientation[9] = {1, 0, 0, 0, 1, 0, 0, 0, 1};
+    const float *location;
+    const signed char *orient;
+
+    if (handle < 0 || handle >= TotalNumSensors) {
+        return -1;
+    }
+
+    switch (handle) {
+    case Gyro:
+        orient = mGyroOrientationMatrix;
+        location = mGyroLocation;
+        break;
+    case MagneticField:
+        orient = mCompassOrientationMatrix;
+        location = mCompassLocation;
+        break;
+    case Pressure:
+        orient = identityOrientation;
+        location = mPressureLocation;
+        break;
+    // use accelerometer orientation by default
+    case Accelerometer:
+    default:
+        orient = mAccelOrientationMatrix;
+        location = mAccelLocation;
+        break;
+    }
+
+    memset(event, 0, sizeof(*event));
+    event->version = sizeof(sensors_event_t);
+    event->sensor = handle;
+    event->type = SENSOR_TYPE_ADDITIONAL_INFO;
+    event->timestamp = seq;
+    event->additional_info.type = AINFO_SENSOR_PLACEMENT;
+    // inverse orientation matrix, Android system to sensor system
+    for (int i = 0; i < 3; ++i) {
+        float *data = &event->additional_info.data_float[i * 4];
+        data[0] = orient[i];
+        data[1] = orient[i + 3];
+        data[2] = orient[i + 6];
+        data[3] = location[i];
+    }
+
+    return 1;
+}
+
+// Internal Temperature event
+int MPLSensor::additionalInfoInternalTemperature(int handle, unsigned int seq, sensors_event_t *event)
+{
+    int temperature;
+    int64_t temp_ts;
+    int ret;
+
+    switch (handle) {
+    case Gyro:
+    case Accelerometer:
+        // Push temperature payload
+        ret = inv_read_temperature(&temperature, &temp_ts);
+        if (ret < 0) {
+            return 0;
+        }
+        mChipTemperatureTimestamp[handle] = temp_ts;
+        memset(event, 0, sizeof(*event));
+        event->version = sizeof(sensors_event_t);
+        event->sensor = handle;
+        event->type = SENSOR_TYPE_ADDITIONAL_INFO;
+        event->timestamp = seq;
+        event->additional_info.type = AINFO_INTERNAL_TEMPERATURE;
+        event->additional_info.data_float[0] = (float)temperature / 100.f;
+        ret = 1;
+        break;
+    default:
+        ret = 0;
+        break;
+    }
+
+    return ret;
+}
+
+int MPLSensor::additionalInfoHandler(int handle, sensors_event_t* data, int count)
+{
+    VHANDLER_LOG;
+
+    sensors_event_t marker, event;
+    int numEventReceived = 0;
+    unsigned int seq = 0;
+    int ret;
+
+    // minimum 3 events: begin - sensor placement - end
+    if (count < 3)
+        return -1;
+
+    // initalize marker event
+    memset(&marker, 0, sizeof(marker));
+    marker.version = sizeof(sensors_event_t);
+    marker.sensor = handle;
+    marker.type = SENSOR_TYPE_ADDITIONAL_INFO;
+
+    // Push begin frame
+    marker.timestamp = seq++;
+    marker.additional_info.type = AINFO_BEGIN;
+    *data++ = marker;
+    numEventReceived++;
+
+    // Sensor placement
+    ret = additionalInfoSensorPlacement(handle, seq, &event);
+    if (ret == 1) {
+        *data++ = event;
+        numEventReceived++;
+        seq++;
+    }
+
+    if (count >= 4) {
+            // Internal Temperature
+            ret = additionalInfoInternalTemperature(handle, seq, &event);
+            if (ret == 1) {
+                *data++ = event;
+                numEventReceived++;
+                seq++;
+            }
+    }
+
+    // Push end frame
+    marker.timestamp = seq++;
+    marker.additional_info.type = AINFO_END;
+    *data++ = marker;
+    numEventReceived++;
+
+    LOGV_IF(HANDLER_DATA, "HAL:additionalInfo %d data", numEventReceived);
+
+    return numEventReceived;
+}
+
+int MPLSensor::periodicAdditionalInfoHandler(int handle, sensors_event_t* data, int count)
+{
+    VHANDLER_LOG;
+
+    const int64_t timestamp = getTimestamp();
+    sensors_event_t marker, events[1];
+    unsigned int ind = 0;
+    unsigned int maxEvents;
+    int numEvents = 0;
+    int ret;
+
+    // we need at least 3 free data events for returning additional info frames
+    if (count < 3) {
+        return -1;
+    }
+    maxEvents = count - 2;
+
+    // forge internal temperature frame
+    if ((timestamp - mChipTemperatureTimestamp[handle]) > ((INV_CHIP_TEMPERATURE_REPORT_PERIOD_MS - 1) * 1000000LL)) {
+        ret = additionalInfoInternalTemperature(handle, ind + 1, &events[ind]);
+        if (ret == 1) {
+            ++ind;
+        }
+    }
+
+    // return immediately if there is no data frame
+    if (ind == 0) {
+        return 0;
+    }
+
+    // initalize marker event
+    memset(&marker, 0, sizeof(marker));
+    marker.version = sizeof(sensors_event_t);
+    marker.sensor = handle;
+    marker.type = SENSOR_TYPE_ADDITIONAL_INFO;
+
+    // Push begin frame
+    marker.timestamp = 0;
+    marker.additional_info.type = AINFO_BEGIN;
+    *data++ = marker;
+    numEvents++;
+
+    // Push data frames
+    for (unsigned int i = 0; i < ind && i < maxEvents; ++i) {
+        *data++ = events[i];
+        numEvents++;
+    }
+
+    // Push end frame
+    marker.timestamp = ind + 1;
+    marker.additional_info.type = AINFO_END;
+    *data++ = marker;
+    numEvents++;
+
+    return numEvents;
+}
+
 void MPLSensor::getHandle(int32_t handle, int &what, std::string &sname)
 {
     VFUNC_LOG;
@@ -778,17 +990,17 @@ void MPLSensor::getHandle(int32_t handle, int &what, std::string &sname)
         return;
     }
     switch (handle) {
-        case ID_RG:
-            what = RawGyro;
-            sname = "RawGyro";
+        case ID_G:
+            what = Gyro;
+            sname = "Gyro";
             break;
         case ID_A:
             what = Accelerometer;
             sname = "Accelerometer";
             break;
-        case ID_RM:
-            what = RawMagneticField;
-            sname = "RawMagneticField";
+        case ID_M:
+            what = MagneticField;
+            sname = "MagneticField";
             break;
         case ID_PS:
             what = Pressure;
@@ -811,22 +1023,49 @@ void MPLSensor::getHandle(int32_t handle, int &what, std::string &sname)
  *  compass or accel data. (Also okay for handling all of them).
  *  @returns 0, if successful, error number if not.
  */
-
 int MPLSensor::readEvents(sensors_event_t* data, int count)
 {
     VHANDLER_LOG;
 
     int numEventReceived = 0;
 
+    // send additional info on enable
+    if (!mAdditionalInfoEnabledVector.empty()) {
+        int sendEvent = additionalInfoHandler(mAdditionalInfoEnabledVector[0], data, count);
+        if (sendEvent > 0) {
+            data += sendEvent;
+            count -= sendEvent;
+            numEventReceived += sendEvent;
+        }
+        pthread_mutex_lock(&mHALMutex);
+        mAdditionalInfoEnabledVector.erase(mAdditionalInfoEnabledVector.begin());
+        pthread_mutex_unlock(&mHALMutex);
+    }
+
     // handle flush complete event
-    if(!mFlushSensorEnabledVector.empty()) {
+    if (!mFlushSensorEnabledVector.empty()) {
+        int sensor = mFlushSensorEnabledVector[0];
         sensors_event_t temp;
-        int sendEvent = metaHandler(&temp, META_DATA_FLUSH_COMPLETE);
+        int sendEvent = metaHandler(sensor, &temp, META_DATA_FLUSH_COMPLETE);
         if(sendEvent == 1 && count > 0) {
             *data++ = temp;
             count--;
             numEventReceived++;
         }
+        sendEvent = additionalInfoHandler(sensor, data, count);
+        if (sendEvent > 0) {
+            data += sendEvent;
+            count -= sendEvent;
+            numEventReceived += sendEvent;
+        } else {
+            // save sensor to send info later
+            pthread_mutex_lock(&mHALMutex);
+            mAdditionalInfoEnabledVector.push_back(sensor);
+            pthread_mutex_unlock(&mHALMutex);
+        }
+        pthread_mutex_lock(&mHALMutex);
+        mFlushSensorEnabledVector.erase(mFlushSensorEnabledVector.begin());
+        pthread_mutex_unlock(&mHALMutex);
     }
 
     for (int i = 0; i < ID_NUMBER; i++) {
@@ -837,6 +1076,12 @@ int MPLSensor::readEvents(sensors_event_t* data, int count)
                 *data++ = mPendingEvents[i];
                 count--;
                 numEventReceived++;
+                int sendEvent = periodicAdditionalInfoHandler(i, data, count);
+                if (sendEvent > 0) {
+                    data += sendEvent;
+                    count -= sendEvent;
+                    numEventReceived += sendEvent;
+                }
             }
         }
     }
@@ -1032,6 +1277,38 @@ int MPLSensor::readPressureEvents(sensors_event_t* s, int count)
     return numEventReceived;
 }
 
+int MPLSensor::inv_read_temperature(int *temperature, int64_t *ts)
+{
+    VHANDLER_LOG;
+
+    int count = 0;
+    char raw_buf[40];
+    int raw = 0;
+    long long timestamp = 0;
+
+    memset(raw_buf, 0, sizeof(raw_buf));
+    count = read_attribute_sensor(chip_temperature_fd, raw_buf,
+            sizeof(raw_buf));
+    if (count < 0) {
+        LOGE("HAL:error reading gyro temperature");
+        return -1;
+    }
+
+    count = sscanf(raw_buf, "%d %lld", &raw, &timestamp);
+    if (count < 0) {
+        LOGW("HAL:error parsing gyro temperature count=%d", count);
+        return -1;
+    }
+
+    LOGV_IF(ENG_VERBOSE && INPUT_DATA,
+            "HAL:temperature raw = %d, timestamp = %lld, count = %d",
+            raw, timestamp, count);
+    *temperature = raw; // degrees Celsius scaled by 100
+    *ts = timestamp;
+
+    return 0;
+}
+
 int MPLSensor::getFd(void) const
 {
     VFUNC_LOG;
@@ -1102,7 +1379,7 @@ int MPLSensor::populateSensorList(struct sensor_t *list, int len)
     return mNumSensors;
 }
 
-/* fill accle metadata */
+/* fill accel metadata */
 void MPLSensor::fillAccel(const char* accel, struct sensor_t *list)
 {
     VFUNC_LOG;
@@ -1115,6 +1392,7 @@ void MPLSensor::fillAccel(const char* accel, struct sensor_t *list)
                 list[i].power = ACCEL_ICM20648_POWER;
                 list[i].minDelay = ACCEL_ICM20648_MINDELAY;
                 list[i].maxDelay = ACCEL_ICM20648_MAXDELAY;
+                list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_ICM20648);
 			} else if (strcmp(accel, "ICM20602") == 0) {
                 list[i].power = ACCEL_ICM20602_POWER;
 #ifdef INV_HIFI_HIGH_ODR
@@ -1123,6 +1401,7 @@ void MPLSensor::fillAccel(const char* accel, struct sensor_t *list)
                 list[i].minDelay = ACCEL_ICM20602_MINDELAY;
 #endif
                 list[i].maxDelay = ACCEL_ICM20602_MAXDELAY;
+                list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_ICM20602);
             } else if (strcmp(accel, "ICM20690") == 0) {
                 list[i].power = ACCEL_ICM20690_POWER;
 #ifdef INV_HIFI_HIGH_ODR
@@ -1131,10 +1410,7 @@ void MPLSensor::fillAccel(const char* accel, struct sensor_t *list)
                 list[i].minDelay = ACCEL_ICM20690_MINDELAY;
 #endif
                 list[i].maxDelay = ACCEL_ICM20690_MAXDELAY;
-            } else if (strcmp(accel, "ICM20608D") == 0) {
-                list[i].power = ACCEL_ICM20608D_POWER;
-                list[i].minDelay = ACCEL_ICM20608D_MINDELAY;
-                list[i].maxDelay = ACCEL_ICM20608D_MAXDELAY;
+                list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_ICM20690);
             } else if (strcmp(accel, "IAM20680") == 0) {
                 list[i].power = ACCEL_IAM20680_POWER;
 #ifdef INV_HIFI_HIGH_ODR
@@ -1143,6 +1419,7 @@ void MPLSensor::fillAccel(const char* accel, struct sensor_t *list)
                 list[i].minDelay = ACCEL_IAM20680_MINDELAY;
 #endif
                 list[i].maxDelay = ACCEL_IAM20680_MAXDELAY;
+                list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_IAM20680);
             } else if (strcmp(accel, "ICM42600") == 0) {
                 list[i].power = ACCEL_ICM42600_POWER;
 #ifdef INV_HIFI_HIGH_ODR
@@ -1151,6 +1428,7 @@ void MPLSensor::fillAccel(const char* accel, struct sensor_t *list)
                 list[i].minDelay = ACCEL_ICM42600_MINDELAY;
 #endif
                 list[i].maxDelay = ACCEL_ICM42600_MAXDELAY;
+                list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_ICM42600);
             } else if (strcmp(accel, "ICM43600") == 0) {
                 list[i].power = ACCEL_ICM43600_POWER;
 #ifdef INV_HIFI_HIGH_ODR
@@ -1159,6 +1437,7 @@ void MPLSensor::fillAccel(const char* accel, struct sensor_t *list)
                 list[i].minDelay = ACCEL_ICM43600_MINDELAY;
 #endif
                 list[i].maxDelay = ACCEL_ICM43600_MAXDELAY;
+                list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_ICM43600);
             }
         }
     }
@@ -1172,11 +1451,12 @@ void MPLSensor::fillGyro(const char* gyro, struct sensor_t *list)
     unsigned int i;
 
     for (i = 0; i < mNumSensors; i++) {
-        if (list[i].handle == SENSORS_RAW_GYROSCOPE_HANDLE){
+        if (list[i].handle == SENSORS_GYROSCOPE_HANDLE){
             if (strcmp(gyro, "ICM20648") == 0) {
                 list[i].power = GYRO_ICM20648_POWER;
                 list[i].minDelay = GYRO_ICM20648_MINDELAY;
                 list[i].maxDelay = GYRO_ICM20648_MAXDELAY;
+                list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_ICM20648);
             } else if (strcmp(gyro, "ICM20602") == 0) {
                 list[i].power = GYRO_ICM20602_POWER;
 #ifdef INV_HIFI_HIGH_ODR
@@ -1185,6 +1465,7 @@ void MPLSensor::fillGyro(const char* gyro, struct sensor_t *list)
                 list[i].minDelay = GYRO_ICM20602_MINDELAY;
 #endif
                 list[i].maxDelay = GYRO_ICM20602_MAXDELAY;
+                list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_ICM20602);
             } else if (strcmp(gyro, "ICM20690") == 0) {
                 list[i].power = GYRO_ICM20690_POWER;
 #ifdef INV_HIFI_HIGH_ODR
@@ -1193,10 +1474,7 @@ void MPLSensor::fillGyro(const char* gyro, struct sensor_t *list)
                 list[i].minDelay = GYRO_ICM20690_MINDELAY;
 #endif
                 list[i].maxDelay = GYRO_ICM20690_MAXDELAY;
-            } else if (strcmp(gyro, "ICM20608D") == 0) {
-                list[i].power = GYRO_ICM20608D_POWER;
-                list[i].minDelay = GYRO_ICM20608D_MINDELAY;
-                list[i].maxDelay = GYRO_ICM20608D_MAXDELAY;
+                list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_ICM20690);
             } else if (strcmp(gyro, "IAM20680") == 0) {
                 list[i].power = GYRO_IAM20680_POWER;
 #ifdef INV_HIFI_HIGH_ODR
@@ -1205,6 +1483,7 @@ void MPLSensor::fillGyro(const char* gyro, struct sensor_t *list)
                 list[i].minDelay = GYRO_IAM20680_MINDELAY;
 #endif
                 list[i].maxDelay = GYRO_IAM20680_MAXDELAY;
+                list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_IAM20680);
             } else if (strcmp(gyro, "ICM42600") == 0) {
                 list[i].power = GYRO_ICM42600_POWER;
 #ifdef INV_HIFI_HIGH_ODR
@@ -1213,6 +1492,7 @@ void MPLSensor::fillGyro(const char* gyro, struct sensor_t *list)
                 list[i].minDelay = GYRO_ICM42600_MINDELAY;
 #endif
                 list[i].maxDelay = GYRO_ICM42600_MAXDELAY;
+                list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_ICM42600);
             } else if (strcmp(gyro, "ICM43600") == 0) {
                 list[i].power = GYRO_ICM43600_POWER;
 #ifdef INV_HIFI_HIGH_ODR
@@ -1221,6 +1501,7 @@ void MPLSensor::fillGyro(const char* gyro, struct sensor_t *list)
                 list[i].minDelay = GYRO_ICM43600_MINDELAY;
 #endif
                 list[i].maxDelay = GYRO_ICM43600_MAXDELAY;
+                list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_ICM43600);
             }
         }
     }
@@ -1304,6 +1585,9 @@ int MPLSensor::inv_init_sysfs_attributes(void)
     /* FIFO high resolution mode */
     sprintf(mpu.high_res_mode, "%s%s", sysfs_path, "/in_high_res_mode");
 
+    /* chip temperature fd */
+    sprintf(mpu.chip_temperature, "%s%s", sysfs_path, "/out_temperature");
+
     return 0;
 }
 
@@ -1376,7 +1660,6 @@ int MPLSensor::batch(int handle, int flags, int64_t period_ns, int64_t timeout)
         return 0;
     }
 
-#ifdef BATCH_MODE_SUPPORT
     if (timeout == 0) {
         mBatchEnabled &= ~(1LL << what);
         mBatchTimeouts[what] = 100000000000LL;
@@ -1385,16 +1668,15 @@ int MPLSensor::batch(int handle, int flags, int64_t period_ns, int64_t timeout)
         mBatchTimeouts[what] = timeout;
     }
     updateBatchTimeout();
-#endif
 
     switch (what) {
-        case RawGyro:
+        case Gyro:
             setGyroRate(period_ns);
             break;
         case Accelerometer:
             setAccelRate(period_ns);
             break;
-        case RawMagneticField:
+        case MagneticField:
             setMagRate(period_ns);
             break;
         case Pressure:
@@ -1417,6 +1699,10 @@ int MPLSensor::flush(int handle)
     getHandle(handle, what, sname);
     if (what < 0) {
         LOGE("HAL:flush - what=%d is invalid", what);
+        return -EINVAL;
+    }
+
+    if (!(mEnabled & (1LL << what))) {
         return -EINVAL;
     }
 

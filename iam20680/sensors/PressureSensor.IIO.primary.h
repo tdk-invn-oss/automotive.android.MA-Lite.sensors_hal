@@ -28,8 +28,6 @@
 #define MAX_CHIP_ID_LEN (20)
 #define PRESSURE_ON_PRIMARY "in_pressure_raw"
 
-#define PRESSURE_MAX_SYSFS_ATTRB        (int)(sizeof(struct sysfs_attrbs) / sizeof(char*))
-
 //PRESSURE_ID_ICP101XX
 // low noise mode
 #define ICP101XX_MEASURE_MODE           3
@@ -69,29 +67,30 @@ protected:
 private:
     int readCalibData();
     void computeCalibMeasures(int32_t raw_p, int32_t raw_t, double *cal_p, double *cal_t);
-    struct sysfs_attrbs {
-        char *buffer_enable;
-        char *buffer_length;
-        char *pressure_enable;
-        char *pressure_index;
-        char *pressure_type;
-        char *temp_enable;
-        char *temp_index;
-        char *temp_type;
-        char *timestamp_enable;
-        char *timestamp_index;
-        char *timestamp_type;
-        char *sampling_frequency;
-        char *pressure_scale;
-        char *pressure_offset;
-        char *temp_scale;
-        char *temp_offset;
-        char *timestamp_scale;
-        char *timestamp_offset;
-
-        char *mode;
-        char *calibdata;
-    } mSysFs;
+    enum sysfs_attr {
+        BUFFER_ENABLE,
+        BUFFER_LENGTH,
+        PRESSURE_ENABLE,
+        PRESSURE_INDEX,
+        PRESSURE_TYPE,
+        TEMP_ENABLE,
+        TEMP_INDEX,
+        TEMP_TYPE,
+        TIMESTAMP_ENABLE,
+        TIMESTAMP_INDEX,
+        TIMESTAMP_TYPE,
+        SAMPLING_FREQUENCY,
+        PRESSURE_SCALE,
+        PRESSURE_OFFSET,
+        TEMP_SCALE,
+        TEMP_OFFSET,
+        TIMESTAMP_SCALE,
+        TIMESTAMP_OFFSET,
+        MODE,
+        CALIBDATA,
+        SYSFS_ATTR_NB,
+    };
+    char *mSysFs[SYSFS_ATTR_NB];
 
     char dev_full_name[MAX_CHIP_ID_LEN];
 

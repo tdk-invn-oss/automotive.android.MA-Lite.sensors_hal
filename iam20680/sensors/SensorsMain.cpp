@@ -28,8 +28,9 @@
 #include <unistd.h>
 #include <string.h>
 #include <inttypes.h>
-#include "Log.h"
+#include <sys/eventfd.h>
 
+#include "Log.h"
 #include "InvnSensors.h"
 #include "MPLSensor.h"
 
@@ -52,6 +53,16 @@ static int sensors__get_sensors_list(struct sensors_module_t* module,
     return sensors;
 }
 
+static int sensors__set_operation_mode(unsigned int mode)
+{
+    switch (mode) {
+    case SENSOR_HAL_NORMAL_MODE:
+        return 0;
+    default:
+        return -EINVAL;
+    }
+}
+
 static struct hw_module_methods_t sensors_module_methods = {
     .open = open_sensors
 };
@@ -69,7 +80,7 @@ struct sensors_module_t HAL_MODULE_INFO_SYM = {
         .reserved = {0}
     },
     .get_sensors_list = sensors__get_sensors_list,
-    .set_operation_mode = NULL,
+    .set_operation_mode = sensors__set_operation_mode,
 };
 
 struct sensors_poll_context_t {
@@ -84,13 +95,15 @@ struct sensors_poll_context_t {
 
 private:
     enum {
-        mpl = 0,
+        exitEvent = 0,
+        mpl,
         compass,
         pressure,
         numFds,
     };
 
     struct pollfd mPollFds[numFds];
+    int exitFd;
     SensorBase *mSensor;
     CompassSensor *mCompassSensor;
     PressureSensor *mPressureSensor;
@@ -118,6 +131,11 @@ sensors_poll_context_t::sensors_poll_context_t() {
             mplSensor->populateSensorList(sSensorList, sizeof(sSensorList));
 
     mSensor = mplSensor;
+
+    mPollFds[exitEvent].fd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
+    mPollFds[exitEvent].events = POLLIN;
+    mPollFds[exitEvent].revents = 0;
+
     mPollFds[mpl].fd = mSensor->getFd();
     mPollFds[mpl].events = POLLIN;
     mPollFds[mpl].revents = 0;
@@ -137,16 +155,38 @@ sensors_poll_context_t::sensors_poll_context_t() {
     } else {
         mPollFds[pressure].fd = -1;
     }
+
+    exitFd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
 }
 
 sensors_poll_context_t::~sensors_poll_context_t() {
     FUNC_LOG;
 
+    struct pollfd pollExit = {
+        .fd = exitFd,
+        .events = POLLIN,
+        .revents = 0,
+    };
+    int64_t exitVal = 1;
+    int ret;
+
+    // exit poll thread
+    ret = write(mPollFds[exitEvent].fd, &exitVal, sizeof(exitVal));
+    LOGE_IF(ret <= 0, "write to poll exitEvent failed error %d", ret);
+    if (ret > 0) {
+        ret = poll(&pollExit, 1, 3 * 1000);
+        LOGE_IF(ret <= 0, "exit poll error %d", ret);
+        if (ret == 1) {
+            ret = read(exitFd, &exitVal, sizeof(exitVal));
+        }
+    }
+
+    close(mPollFds[exitEvent].fd);
+    close(exitFd);
+
     delete mSensor;
-    if (mCompassSensor)
-        delete mCompassSensor;
-    if (mPressureSensor)
-        delete mPressureSensor;
+    delete mCompassSensor;
+    delete mPressureSensor;
 }
 
 int sensors_poll_context_t::activate(int handle, int enabled) {
@@ -163,6 +203,7 @@ int sensors_poll_context_t::pollEvents(sensors_event_t *data, int count)
 
     int nbEvents = 0;
     int nb, polltime = -1;
+    int ret;
 
     // look for new events
     do {
@@ -174,7 +215,12 @@ int sensors_poll_context_t::pollEvents(sensors_event_t *data, int count)
             for (int i = 0; count && i < numFds; i++) {
                 if (mPollFds[i].revents & (POLLIN | POLLPRI)) {
                     nb = 0;
-                    if (i == mpl) {
+                    if (i == exitEvent) {
+                        int64_t exitVal = 1;
+                        ret = write(exitFd, &exitVal, sizeof(exitVal));
+                        LOGE_IF(ret <= 0, "poll thread exitFd write error %d", errno);
+                        return 0;
+                    } else if (i == mpl) {
                         nb = ((MPLSensor*) mSensor)->readMpuEvents(data, count);
                         mPollFds[i].revents = 0;
                     } else if (i == compass) {
@@ -258,6 +304,15 @@ static int poll__flush(struct sensors_poll_device_1 *dev,
     return ctx->flush(handle);
 }
 
+static int poll__inject_sensor_data(struct sensors_poll_device_1 *dev,
+                                    const sensors_event_t *data)
+{
+    (void)dev;
+    (void)data;
+
+    return -EPERM;
+}
+
 /******************************************************************************/
 
 /** Open a new instance of a sensor device using name */
@@ -273,7 +328,7 @@ static int open_sensors(const struct hw_module_t* module, const char* id,
     memset(&dev->device, 0, sizeof(sensors_poll_device_1));
 
     dev->device.common.tag          = HARDWARE_DEVICE_TAG;
-    dev->device.common.version      = SENSORS_DEVICE_API_VERSION_1_3;
+    dev->device.common.version      = SENSORS_DEVICE_API_VERSION_1_4;
     dev->device.common.module       = const_cast<hw_module_t*>(module);
     dev->device.common.close        = poll__close;
     dev->device.activate            = poll__activate;
@@ -281,6 +336,8 @@ static int open_sensors(const struct hw_module_t* module, const char* id,
     dev->device.setDelay            = poll__setDelay;
     dev->device.batch               = poll__batch;
     dev->device.flush               = poll__flush;
+    dev->device.inject_sensor_data  = poll__inject_sensor_data;
+
     *device = &dev->device.common;
     status = 0;
 

@@ -30,7 +30,7 @@ LOCAL_PROPRIETARY_MODULE := true
 LOCAL_HEADER_LIBRARIES := libhardware_headers
 
 LOCAL_CFLAGS := -Wall -Wextra -Werror
-LOCAL_CFLAGS += -DLOG_TAG=\"Sensors\"
+LOCAL_CFLAGS += -DLOG_TAG=\"InvnSensors\"
 LOCAL_CFLAGS += $(INV_CFLAGS)
 
 LOCAL_SRC_FILES += $(INV_SRCS)

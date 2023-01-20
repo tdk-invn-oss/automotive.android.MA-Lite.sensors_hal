@@ -133,17 +133,19 @@ private:
     void setMagRate(uint64_t period_ns);
     void setPressureRate(uint64_t period_ns);
 
-#ifdef BATCH_MODE_SUPPORT
     void setBatchTimeout(int64_t timeout_ns);
     void updateBatchTimeout(void);
-#endif
 
     /* data handlers */
-    int rawGyroHandler(sensors_event_t *data);
+    int gyroHandler(sensors_event_t *data);
     int accelHandler(sensors_event_t *data);
-    int rawCompassHandler(sensors_event_t *data);
+    int compassHandler(sensors_event_t *data);
     int psHandler(sensors_event_t *data);
-    int metaHandler(sensors_event_t *data, int flags); // for flush complete
+    int metaHandler(int sensor, sensors_event_t *data, int flags); // for flush complete
+    int additionalInfoSensorPlacement(int handle, unsigned int seq, sensors_event_t* event);
+    int additionalInfoInternalTemperature(int handle, unsigned int seq, sensors_event_t *event);
+    int additionalInfoHandler(int handle, sensors_event_t *data, int count);
+    int periodicAdditionalInfoHandler(int handle, sensors_event_t *data, int count);
 
     void getHandle(int32_t handle, int &what, std::string &sname);
     void inv_set_device_properties();
@@ -152,6 +154,7 @@ private:
     typedef int (*get_sensor_data_func)(float *values, int8_t *accuracy, int64_t *timestamp, int mode);
     void fillAccel(const char* accel, struct sensor_t *list);
     void fillGyro(const char* gyro, struct sensor_t *list);
+    int inv_read_temperature(int *temperature, int64_t *ts);
 
     pthread_mutex_t mHALMutex;
     bool mChipDetected;
@@ -159,21 +162,25 @@ private:
     uint32_t mNumSensors;
     uint64_t mEnabled;
     int iio_fd;
+    int chip_temperature_fd;
     char mIIOReadBuffer[MAX_READ_SIZE];
     int mIIOReadSize;
     int mPollTime;
     int64_t mDelays[TotalNumSensors];
     int64_t mEnabledTime[TotalNumSensors];
-#ifdef BATCH_MODE_SUPPORT
     uint64_t mBatchEnabled;
     int64_t mBatchTimeouts[TotalNumSensors];
     int64_t mBatchTimeoutInMs;
-#endif
     char mSysfsPath[MAX_SYSFS_NAME_LEN];
     char *sysfs_names_ptr;
     std::vector<int> mFlushSensorEnabledVector;
     sensors_event_t mPendingEvents[TotalNumSensors];
     hfunc_t mHandlers[TotalNumSensors];
+    std::vector<int> mAdditionalInfoEnabledVector;
+    float mGyroLocation[3];
+    float mAccelLocation[3];
+    float mCompassLocation[3];
+    float mPressureLocation[3];
 
     /* mount matrix */
     signed char mGyroOrientationMatrix[9];
@@ -191,6 +198,7 @@ private:
     int64_t mAccelSensorTimestamp;
     int64_t mCompassTimestamp;
     int64_t mPressureTimestamp;
+    int64_t mChipTemperatureTimestamp[TotalNumSensors];
     int64_t mGyroSensorPrevTimestamp;
     int64_t mAccelSensorPrevTimestamp;
     int64_t mCompassPrevTimestamp;
@@ -233,6 +241,7 @@ private:
        char *batchmode_timeout;
        char *flush_batch;
        char *high_res_mode;
+       char *chip_temperature;
    } mpu;
 };
 

@@ -29,8 +29,6 @@
 #define MAX_CHIP_ID_LEN (20)
 #define COMPASS_ON_PRIMARY "in_magn_x_raw"
 
-#define COMPASS_MAX_SYSFS_ATTRB         (int)(sizeof(struct sysfs_attrbs) / sizeof(char*))
-
 
 class CompassSensor : public SensorBase {
 
@@ -55,32 +53,34 @@ public:
     void fillList(struct sensor_t *list);
 
 private:
-    struct sysfs_attrbs {
-       char *buffer_enable;
-       char *buffer_length;
-       char *compass_x_enable;
-       char *compass_x_index;
-       char *compass_x_type;
-       char *compass_y_enable;
-       char *compass_y_index;
-       char *compass_y_type;
-       char *compass_z_enable;
-       char *compass_z_index;
-       char *compass_z_type;
-       char *timestamp_enable;
-       char *timestamp_index;
-       char *timestamp_type;
-       char *compass_rate;
-       char *compass_x_scale;
-       char *compass_x_offset;
-       char *compass_y_scale;
-       char *compass_y_offset;
-       char *compass_z_scale;
-       char *compass_z_offset;
-       char *timestamp_scale;
-       char *timestamp_offset;
-       char *compass_orient;
-    } compassSysFs;
+    enum sysfs_attr {
+        BUFFER_ENABLE,
+        BUFFER_LENGTH,
+        COMPASS_X_ENABLE,
+        COMPASS_X_INDEX,
+        COMPASS_X_TYPE,
+        COMPASS_Y_ENABLE,
+        COMPASS_Y_INDEX,
+        COMPASS_Y_TYPE,
+        COMPASS_Z_ENABLE,
+        COMPASS_Z_INDEX,
+        COMPASS_Z_TYPE,
+        TIMESTAMP_ENABLE,
+        TIMESTAMP_INDEX,
+        TIMESTAMP_TYPE,
+        COMPASS_RATE,
+        COMPASS_X_SCALE,
+        COMPASS_X_OFFSET,
+        COMPASS_Y_SCALE,
+        COMPASS_Y_OFFSET,
+        COMPASS_Z_SCALE,
+        COMPASS_Z_OFFSET,
+        TIMESTAMP_SCALE,
+        TIMESTAMP_OFFSET,
+        COMPASS_ORIENT,
+        SYSFS_ATTR_NB,
+    };
+    char *compassSysFs[SYSFS_ATTR_NB];
 
     char dev_full_name[MAX_CHIP_ID_LEN];
 
