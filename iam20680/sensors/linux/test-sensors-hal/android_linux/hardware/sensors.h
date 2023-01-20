@@ -185,6 +185,13 @@ enum {
 #define SENSOR_STRING_TYPE_ADDITIONAL_INFO              "android.sensor.additional_info"
 #define SENSOR_STRING_TYPE_LOW_LATENCY_OFFBODY_DETECT   "android.sensor.low_latency_offbody_detect"
 #define SENSOR_STRING_TYPE_ACCELEROMETER_UNCALIBRATED   "android.sensor.accelerometer_uncalibrated"
+#define SENSOR_STRING_TYPE_HINGE_ANGLE                  "android.sensor.hinge_angle"
+#define SENSOR_STRING_TYPE_HEAD_TRACKER                 "android.sensor.head_tracker"
+#define SENSOR_STRING_TYPE_ACCELEROMETER_LIMITED_AXES   "android.sensor.accelerometer_limited_axes"
+#define SENSOR_STRING_TYPE_GYROSCOPE_LIMITED_AXES       "android.sensor.gyroscope_limited_axes"
+#define SENSOR_STRING_TYPE_ACCELEROMETER_LIMITED_AXES_UNCALIBRATED "android.sensor.accelerometer_limited_axes_uncalibrated"
+#define SENSOR_STRING_TYPE_GYROSCOPE_LIMITED_AXES_UNCALIBRATED "android.sensor.gyroscope_limited_axes_uncalibrated"
+#define SENSOR_STRING_TYPE_HEADING                      "android.sensor.heading"
 
 /**
  * Values returned by the accelerometer in various locations in the universe.
@@ -290,6 +297,76 @@ typedef struct {
     };
 } additional_info_event_t;
 
+typedef struct {
+    float rx;
+    float ry;
+    float rz;
+    float vx;
+    float vy;
+    float vz;
+    int32_t discontinuity_count;
+} head_tracker_event_t;
+
+/**
+ * limited axes imu event data
+ */
+typedef struct {
+    union {
+        float calib[3];
+        struct {
+            float x;
+            float y;
+            float z;
+        };
+    };
+    union {
+        float supported[3];
+        struct {
+            float x_supported;
+            float y_supported;
+            float z_supported;
+        };
+    };
+} limited_axes_imu_event_t;
+
+/**
+ * limited axes uncalibrated imu event data
+ */
+typedef struct {
+    union {
+        float uncalib[3];
+        struct {
+            float x_uncalib;
+            float y_uncalib;
+            float z_uncalib;
+        };
+    };
+    union {
+        float bias[3];
+        struct {
+            float x_bias;
+            float y_bias;
+            float z_bias;
+        };
+    };
+    union {
+        float supported[3];
+        struct {
+            float x_supported;
+            float y_supported;
+            float z_supported;
+        };
+    };
+} limited_axes_imu_uncalibrated_event_t;
+
+/**
+ * Heading event data
+ */
+typedef struct {
+  float heading;
+  float accuracy;
+} heading_event_t;
+
 /**
  * Union of the various types of sensor data
  * that can be returned.
@@ -367,6 +444,26 @@ typedef struct sensors_event_t {
              * SENSOR_TYPE_ADDITIONAL_INFO for details.
              */
             additional_info_event_t additional_info;
+
+            /* vector describing head orientation (added for legacy code support only) */
+            head_tracker_event_t head_tracker;
+
+            /*
+             * limited axes imu event, See
+             * SENSOR_TYPE_GYROSCOPE_LIMITED_AXES and
+             * SENSOR_TYPE_ACCELEROMETER_LIMITED_AXES for details.
+             */
+            limited_axes_imu_event_t limited_axes_imu;
+
+            /*
+             * limited axes imu uncalibrated event, See
+             * SENSOR_TYPE_GYROSCOPE_LIMITED_AXES_UNCALIBRATED and
+             * SENSOR_TYPE_ACCELEROMETER_LIMITED_AXES_UNCALIBRATED for details.
+             */
+            limited_axes_imu_uncalibrated_event_t limited_axes_imu_uncalibrated;
+
+            /* heading data containing value in degrees and its accuracy */
+            heading_event_t heading;
         };
 
         union {
@@ -578,10 +675,11 @@ typedef struct sensors_poll_device_1 {
              * sensor_handle is the handle of the sensor to change.
              * enabled set to 1 to enable, or 0 to disable the sensor.
              *
-             * After sensor de-activation, existing sensor events that have not
-             * been picked up by poll() should be abandoned immediately so that
-             * subsequent activation will not get stale sensor events (events
-             * that is generated prior to the latter activation).
+             * Before sensor activation, existing sensor events that have not
+             * been picked up by poll() should be abandoned so that application
+             * upon new activation request will not get stale events.
+             * (events that are generated during latter activation or during
+             * data injection mode after sensor deactivation)
              *
              * Return 0 on success, negative errno code otherwise.
              */

@@ -19,6 +19,7 @@
 
 #include <stdint.h>
 #include <errno.h>
+#include <linux/limits.h>
 #include <sys/cdefs.h>
 #include <sys/types.h>
 #include "Log.h"
