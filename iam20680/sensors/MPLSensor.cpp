@@ -27,6 +27,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <inttypes.h>
+#include <sys/ioctl.h>
 #include <sys/select.h>
 #include <sys/syscall.h>
 #include <dlfcn.h>
@@ -41,6 +42,8 @@
 
 #include "Log.h"
 #include "ml_sysfs_helper.h"
+
+#define IIO_BUFFER_GET_FD_IOCTL        _IOWR('i', 0x91, int)
 
 #define MAX_SYSFS_ATTRB (sizeof(struct sysfs_attrbs) / sizeof(char*))
 
@@ -287,6 +290,9 @@ void MPLSensor::enable_iio_sysfs(void)
 
     char iio_device_node[MAX_CHIP_ID_LEN];
     FILE *tempFp = NULL;
+    int iio_device_fd = -1;
+    int data;
+    int ret;
 
     // turn off chip in case
     LOGV_IF(SYSFS_VERBOSE, "HAL:sysfs:echo %d > %s (%lld)",
@@ -338,11 +344,24 @@ void MPLSensor::enable_iio_sysfs(void)
     }
 
     inv_get_iio_device_node(iio_device_node);
-    iio_fd = open(iio_device_node, O_RDONLY);
-    if (iio_fd < 0) {
+    iio_device_fd = open(iio_device_node, O_RDONLY);
+    if (iio_device_fd < 0) {
         LOGE("HAL:could not open iio device node");
+        return;
+    }
+    LOGV_IF(ENG_VERBOSE, "HAL:iio iio_device_fd opened: %d", iio_device_fd);
+
+    /* open buffer 0 for API comptability */
+    data = 0;
+    ret = ioctl(iio_device_fd, IIO_BUFFER_GET_FD_IOCTL, &data);
+    if (ret == -1) {
+        LOGI("HAL:using iio device fd for data");
+        iio_fd = iio_device_fd;
     } else {
-        LOGV_IF(ENG_VERBOSE, "HAL:iio iio_fd opened : %d", iio_fd);
+        LOGI("HAL:using iio buffer0 fd for data");
+        iio_fd = data;
+        close(iio_device_fd);
+        LOGV_IF(ENG_VERBOSE, "HAL:iio iio buffer0 fd opened: %d", iio_fd);
     }
 }
 
