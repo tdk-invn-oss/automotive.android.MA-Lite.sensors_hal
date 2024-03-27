@@ -72,89 +72,97 @@
 
 /******************************************/
 // ACCEL ICM20602
-#define ACCEL_ICM20602_RANGE             (2.f * GRAVITY_EARTH)
-#define ACCEL_ICM20602_RESOLUTION        (2.f * GRAVITY_EARTH / 32768.f)
+#define ACCEL_ICM20602_RANGE             (16)
 #define ACCEL_ICM20602_POWER             (0.4f)
-#define ACCEL_ICM20602_MINDELAY          (5000)
-#define ACCEL_ICM20602_MINDELAY_HIFI     (2000)
+#define ACCEL_ICM20602_MINDELAY          (2000)
 #define ACCEL_ICM20602_MAXDELAY          (250000)
 // ACCEL ICM20690
-#define ACCEL_ICM20690_RANGE             (2.f * GRAVITY_EARTH)
-#define ACCEL_ICM20690_RESOLUTION        (2.f * GRAVITY_EARTH / 32768.f)
+#define ACCEL_ICM20690_RANGE             (16)
 #define ACCEL_ICM20690_POWER             (0.5f)
-#define ACCEL_ICM20690_MINDELAY          (5000)
-#define ACCEL_ICM20690_MINDELAY_HIFI     (2000)
+#define ACCEL_ICM20690_MINDELAY          (2000)
 #define ACCEL_ICM20690_MAXDELAY          (250000)
+// ACCEL ICM20608D
+#define ACCEL_ICM20608D_RANGE            (8)
+#define ACCEL_ICM20608D_POWER            (0.5f)
+#define ACCEL_ICM20608D_MINDELAY         (5000)
+#define ACCEL_ICM20608D_MAXDELAY         (1000000)
 // ACCEL IAM20680
-#define ACCEL_IAM20680_RANGE             (2.f * GRAVITY_EARTH)
-#define ACCEL_IAM20680_RESOLUTION        (2.f * GRAVITY_EARTH / 32768.f)
+#define ACCEL_IAM20680_RANGE             (8)
 #define ACCEL_IAM20680_POWER             (0.5f)
-#define ACCEL_IAM20680_MINDELAY          (5000)
-#define ACCEL_IAM20680_MINDELAY_HIFI     (2000)
+#define ACCEL_IAM20680_MINDELAY          (2000)
 #define ACCEL_IAM20680_MAXDELAY          (250000)
 //ACCEL ICM20648
-#define ACCEL_ICM20648_RANGE             (2.f * GRAVITY_EARTH)
-#define ACCEL_ICM20648_RESOLUTION        (2.f * GRAVITY_EARTH / 32768.f)
+#define ACCEL_ICM20648_RANGE             (8)
 #define ACCEL_ICM20648_POWER             (0.5f)
 #define ACCEL_ICM20648_MINDELAY          (4444)
 #define ACCEL_ICM20648_MAXDELAY          (1000000)
 //ACCEL ICM42600
-#define ACCEL_ICM42600_RANGE             (2.f * GRAVITY_EARTH)
-#define ACCEL_ICM42600_RESOLUTION        (2.f * GRAVITY_EARTH / 32768.f)
+#define ACCEL_ICM42600_RANGE             (16)
 #define ACCEL_ICM42600_POWER             (0.35f)
-#define ACCEL_ICM42600_MINDELAY          (5000)
-#define ACCEL_ICM42600_MINDELAY_HIFI     (2000)
+#define ACCEL_ICM42600_MINDELAY          (2000)
 #define ACCEL_ICM42600_MAXDELAY          (320000)
+//ACCEL ICM42686
+#define ACCEL_ICM42686_RANGE             (32)
+#define ACCEL_ICM42686_POWER             (0.35f)
+#define ACCEL_ICM42686_MINDELAY          (2000)
+#define ACCEL_ICM42686_MAXDELAY          (320000)
 //ACCEL ICM43600
-#define ACCEL_ICM43600_RANGE             (2.f * GRAVITY_EARTH)
-#define ACCEL_ICM43600_RESOLUTION        (2.f * GRAVITY_EARTH / 32768.f)
+#define ACCEL_ICM43600_RANGE             (16)
 #define ACCEL_ICM43600_POWER             (0.35f)
-#define ACCEL_ICM43600_MINDELAY          (5000)
-#define ACCEL_ICM43600_MINDELAY_HIFI     (1250)
+#define ACCEL_ICM43600_MINDELAY          (1250)
 #define ACCEL_ICM43600_MAXDELAY          (320000)
+//ACCEL ICM45600
+#define ACCEL_ICM45600_RANGE             (16)
+#define ACCEL_ICM45600_POWER             (0.35f)
+#define ACCEL_ICM45600_MINDELAY          (1250)
+#define ACCEL_ICM45600_MAXDELAY          (80000)
 
 /******************************************/
 //GYRO ICM20602
-#define GYRO_ICM20602_RANGE              (2000.f * M_PI / 180.f)
-#define GYRO_ICM20602_RESOLUTION         (2000.f * M_PI / (180.f * 32768.f))
+#define GYRO_ICM20602_RANGE              (2000)
 #define GYRO_ICM20602_POWER              (3.f)
-#define GYRO_ICM20602_MINDELAY           (5000)
-#define GYRO_ICM20602_MINDELAY_HIFI      (2000)
+#define GYRO_ICM20602_MINDELAY           (2000)
 #define GYRO_ICM20602_MAXDELAY           (250000)
 //GYRO ICM20690
-#define GYRO_ICM20690_RANGE              (2000.f * M_PI / 180.f)
-#define GYRO_ICM20690_RESOLUTION         (2000.f * M_PI / (180.f * 32768.f))
+#define GYRO_ICM20690_RANGE              (2000)
 #define GYRO_ICM20690_POWER              (3.5f)
-#define GYRO_ICM20690_MINDELAY           (5000)
-#define GYRO_ICM20690_MINDELAY_HIFI      (2000)
+#define GYRO_ICM20690_MINDELAY           (2000)
 #define GYRO_ICM20690_MAXDELAY           (250000)
+//GYRO ICM20608D
+#define GYRO_ICM20608D_RANGE             (2000)
+#define GYRO_ICM20608D_POWER             (3.5f)
+#define GYRO_ICM20608D_MINDELAY          (5000)
+#define GYRO_ICM20608D_MAXDELAY          (1000000)
 //GYRO IAM20680
-#define GYRO_IAM20680_RANGE              (2000.f * M_PI / 180.f)
-#define GYRO_IAM20680_RESOLUTION         (2000.f * M_PI / (180.f * 32768.f))
+#define GYRO_IAM20680_RANGE              (2000)
 #define GYRO_IAM20680_POWER              (3.f)
-#define GYRO_IAM20680_MINDELAY           (5000)
-#define GYRO_IAM20680_MINDELAY_HIFI      (2000)
+#define GYRO_IAM20680_MINDELAY           (2000)
 #define GYRO_IAM20680_MAXDELAY           (250000)
 //GYRO ICM20648
-#define GYRO_ICM20648_RANGE              (2000.f * M_PI / 180.f)
-#define GYRO_ICM20648_RESOLUTION         (2000.f * M_PI / (180.f * 32768.f))
+#define GYRO_ICM20648_RANGE              (2000)
 #define GYRO_ICM20648_POWER              (5.5f)
 #define GYRO_ICM20648_MINDELAY           (4444)
 #define GYRO_ICM20648_MAXDELAY           (1000000)
 //GYRO ICM42600
-#define GYRO_ICM42600_RANGE              (2000.f * M_PI / 180.f)
-#define GYRO_ICM42600_RESOLUTION         (2000.f * M_PI / (180.f * 32768.f))
+#define GYRO_ICM42600_RANGE              (2000)
 #define GYRO_ICM42600_POWER              (0.75f)
-#define GYRO_ICM42600_MINDELAY           (5000)
-#define GYRO_ICM42600_MINDELAY_HIFI      (2000)
+#define GYRO_ICM42600_MINDELAY           (2000)
 #define GYRO_ICM42600_MAXDELAY           (80000)
+//GYRO ICM42686
+#define GYRO_ICM42686_RANGE              (4000)
+#define GYRO_ICM42686_POWER              (0.75f)
+#define GYRO_ICM42686_MINDELAY           (2000)
+#define GYRO_ICM42686_MAXDELAY           (80000)
 //GYRO ICM43600
-#define GYRO_ICM43600_RANGE              (2000.f * M_PI / 180.f)
-#define GYRO_ICM43600_RESOLUTION         (2000.f * M_PI / (180.f * 32768.f))
+#define GYRO_ICM43600_RANGE              (2000)
 #define GYRO_ICM43600_POWER              (0.75f)
-#define GYRO_ICM43600_MINDELAY           (5000)
-#define GYRO_ICM43600_MINDELAY_HIFI      (1250)
+#define GYRO_ICM43600_MINDELAY           (1250)
 #define GYRO_ICM43600_MAXDELAY           (80000)
+//GYRO ICM45600
+#define GYRO_ICM45600_RANGE              (2000)
+#define GYRO_ICM45600_POWER              (0.75f)
+#define GYRO_ICM45600_MINDELAY           (1250)
+#define GYRO_ICM45600_MAXDELAY           (80000)
 
 /******************************************/
 //PRESSURE BMP280
@@ -183,9 +191,11 @@
 #define FIFO_SIZE_COMPUTE(_sz)    ((_sz) * 7 / 10 / 6)
 #define FIFO_SIZE_IAM20680        512
 #define FIFO_SIZE_ICM20648        512
+#define FIFO_SIZE_ICM20608D       512
 #define FIFO_SIZE_ICM20602        1024
 #define FIFO_SIZE_ICM20690        1024
 #define FIFO_SIZE_ICM42600        2048
 #define FIFO_SIZE_ICM43600        1024
+#define FIFO_SIZE_ICM45600        2048
 
 #endif  /* INV_SENSOR_PARAMS_H */

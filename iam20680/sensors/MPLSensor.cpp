@@ -47,67 +47,19 @@
 
 #define MAX_SYSFS_ATTRB (sizeof(struct sysfs_attrbs) / sizeof(char*))
 
-/* Set default accel and gyro FSR (use enhanced FSR if available) */
-#ifdef ACCEL_ENHANCED_FSR_SUPPORT
-#  define DEFAULT_ACCEL_FSR        32.0f     // 32g
-#  define DEFAULT_ACCEL_FSR_SYSFS  4         // 0:2g, 1:4g, 2:8g, 3:16g, 4:32g
-#else
-#  ifdef INV_HIFI_ACCEL_16G
-#    define DEFAULT_ACCEL_FSR        16.0f   // 16g
-#    define DEFAULT_ACCEL_FSR_SYSFS  3       // 0:2g, 1:4g, 2:8g, 3:16g, 4:32g
-#  else
-#    define DEFAULT_ACCEL_FSR        8.0f    // 8g
-#    define DEFAULT_ACCEL_FSR_SYSFS  2       // 0:2g, 1:4g, 2:8g, 3:16g, 4:32g
-#  endif
-#endif
-
-#ifdef GYRO_ENHANCED_FSR_SUPPORT
-#  define DEFAULT_GYRO_FSR         4000.0f   // 4000dps
-#  define DEFAULT_GYRO_FSR_SYSFS   4         // 0:250dps, 1:500dps, 2:1000dps, 3:2000dps, 4:4000dps
-#else
-#  ifdef INV_GYRO_250DPS
-#    define DEFAULT_GYRO_FSR         250.0f // 250dps
-#    define DEFAULT_GYRO_FSR_SYSFS   0       // 0:250dps, 1:500dps, 2:1000dps, 3:2000dps, 4:4000dps
-#  else
-#    define DEFAULT_GYRO_FSR         2000.0f // 2000dps
-#    define DEFAULT_GYRO_FSR_SYSFS   3       // 0:250dps, 1:500dps, 2:1000dps, 3:2000dps, 4:4000dps
-#  endif
-#endif
-
 /* Force fixed full FSR for FIFO high resolution */
 #ifdef FIFO_HIGH_RES_ENABLE
 
-#ifdef ACCEL_ENHANCED_FSR_SUPPORT
-#define ACCEL_FSR        32.0f
-#define ACCEL_FSR_SYSFS  4
-#else
-#define ACCEL_FSR        16.0f
-#define ACCEL_FSR_SYSFS  3
-#endif
-
-#ifdef GYRO_ENHANCED_FSR_SUPPORT
-#define GYRO_FSR        4000.0f
-#define GYRO_FSR_SYSFS  4
-#else
-#define GYRO_FSR        2000.0f
-#define GYRO_FSR_SYSFS  3
-#endif
-
-/* Set default FSR otherwise */
-#else /* FIFO_HIGH_RES_ENABLE */
-
-#define ACCEL_FSR        DEFAULT_ACCEL_FSR
-#define ACCEL_FSR_SYSFS  DEFAULT_ACCEL_FSR_SYSFS
-#define GYRO_FSR         DEFAULT_GYRO_FSR
-#define GYRO_FSR_SYSFS   DEFAULT_GYRO_FSR_SYSFS
+#undef ACCEL_ICM42600_RANGE
+#define ACCEL_ICM42600_RANGE    (16)
+#undef ACCEL_ICM42686_RANGE
+#define ACCEL_ICM42686_RANGE    (32)
+#undef GYRO_ICM42600_RANGE
+#define GYRO_ICM42600_RANGE     (2000)
+#undef GYRO_ICM42686_RANGE
+#define GYRO_ICM42686_RANGE     (4000)
 
 #endif /* FIFO_HIGH_RES_ENABLE */
-
-#ifdef ODR_SMPLRT_DIV
-#define MAX_DELAY_US    250000 // for ICM2xxxx
-#else
-#define MAX_DELAY_US    320000 // for ICM4xxxx
-#endif
 
 #ifdef FIFO_HIGH_RES_ENABLE
 #define MAX_LSB_DATA    524288.0f   // 2^19
@@ -115,8 +67,8 @@
 #define MAX_LSB_DATA    32768.0f    // 2^15
 #endif
 
-/* Set Chip temperature reporting period */
-#define INV_CHIP_TEMPERATURE_REPORT_PERIOD_MS    100
+/* enable chip temperature periodical report */
+// #define INV_CHIP_TEMPERATURE_REPORT_PERIOD_MS    100
 
 /*******************************************************************************
  * MPLSensor class implementation
@@ -129,15 +81,15 @@ static struct sensor_t sRawSensorList[] =
         .version = 1,
         .handle = SENSORS_GYROSCOPE_HANDLE,
         .type = SENSOR_TYPE_GYROSCOPE,
-        .maxRange = GYRO_FSR * M_PI / 180.0f,
-        .resolution = GYRO_FSR * M_PI / (180.0f * MAX_LSB_DATA),
-        .power = 3.0f,
-        .minDelay = 5000,
+        .maxRange = 0,
+        .resolution = 0,
+        .power = 0.0f,
+        .minDelay = 0,
         .fifoReservedEventCount = 0,
         .fifoMaxEventCount = 0,
         .stringType = SENSOR_STRING_TYPE_GYROSCOPE,
         .requiredPermission = "",
-        .maxDelay = MAX_DELAY_US,
+        .maxDelay = 0,
         .flags = SENSOR_FLAG_CONTINUOUS_MODE | SENSOR_FLAG_ADDITIONAL_INFO,
         .reserved = {},
     },
@@ -147,15 +99,15 @@ static struct sensor_t sRawSensorList[] =
         .version = 1,
         .handle = SENSORS_ACCELERATION_HANDLE,
         .type = SENSOR_TYPE_ACCELEROMETER,
-        .maxRange = GRAVITY_EARTH * ACCEL_FSR,
-        .resolution = GRAVITY_EARTH * ACCEL_FSR / MAX_LSB_DATA,
-        .power = 0.4f,
-        .minDelay = 5000,
+        .maxRange = 0,
+        .resolution = 0,
+        .power = 0.0f,
+        .minDelay = 0,
         .fifoReservedEventCount = 0,
         .fifoMaxEventCount = 0,
         .stringType = SENSOR_STRING_TYPE_ACCELEROMETER,
         .requiredPermission = "",
-        .maxDelay = MAX_DELAY_US,
+        .maxDelay = 0,
         .flags = SENSOR_FLAG_CONTINUOUS_MODE | SENSOR_FLAG_ADDITIONAL_INFO,
         .reserved = {}
     },
@@ -168,12 +120,15 @@ MPLSensor::MPLSensor(CompassSensor *compass, PressureSensor *pressure)
     chip_temperature_fd(-1),
     mIIOReadSize(0),
     mPollTime(-1),
+    mImuTemperatureTimestamp(0),
     mGyroSensorPrevTimestamp(0),
     mAccelSensorPrevTimestamp(0),
     mCompassPrevTimestamp(0),
     mPressurePrevTimestamp(0)
 {
     VFUNC_LOG;
+    int scale;
+    int ret;
 
     mCompassSensor = compass;
     mPressureSensor = pressure;
@@ -200,19 +155,19 @@ MPLSensor::MPLSensor(CompassSensor *compass, PressureSensor *pressure)
     /* setup sysfs paths */
     inv_init_sysfs_attributes();
 
+    /* print software version string */
+    LOGI("InvenSense MA-Lite Sensors HAL version %d.%d.%d%s\n",
+         INV_SENSORS_HAL_VERSION_MAJOR, INV_SENSORS_HAL_VERSION_MINOR,
+         INV_SENSORS_HAL_VERSION_PATCH, INV_SENSORS_HAL_VERSION_SUFFIX);
+
     /* get chip name */
     if (inv_get_chip_name(chip_ID) != INV_SUCCESS) {
         LOGE("HAL:ERR Failed to get chip ID\n");
         mChipDetected = false;
     } else {
-        LOGV_IF(PROCESS_VERBOSE, "HAL:Chip ID= %s\n", chip_ID);
+        LOGI("HAL:Chip ID is %s\n", chip_ID);
         mChipDetected = true;
     }
-
-    /* print software version string */
-    LOGI("InvenSense MA-Lite Sensors HAL version %d.%d.%d%s\n",
-         INV_SENSORS_HAL_VERSION_MAJOR, INV_SENSORS_HAL_VERSION_MINOR,
-         INV_SENSORS_HAL_VERSION_PATCH, INV_SENSORS_HAL_VERSION_SUFFIX);
 
     /* enable iio */
     enable_iio_sysfs();
@@ -272,13 +227,81 @@ MPLSensor::MPLSensor(CompassSensor *compass, PressureSensor *pressure)
     write_sysfs_int(mpu.high_res_mode, 0);
 #endif
 
-    /* set accel FSR */
-    write_sysfs_int(mpu.accel_fsr, ACCEL_FSR_SYSFS);
-    read_sysfs_int(mpu.accel_fsr, &mAccelFsrGee); /* read actual fsr */
+    /* set accel & gyro FSRs */
+    if (strcmp(chip_ID, "ICM20648") == 0) {
+        mAccelFsrGee = ACCEL_ICM20648_RANGE;
+        mGyroFsrDps = GYRO_ICM20648_RANGE;
+    } else if (strcmp(chip_ID, "ICM20608D") == 0 || strcmp(chip_ID, "ICM20609I") == 0) {
+        mAccelFsrGee = ACCEL_ICM20608D_RANGE;
+        mGyroFsrDps = GYRO_ICM20608D_RANGE;
+    } else if (strcmp(chip_ID, "IAM20680") == 0) {
+        mAccelFsrGee = ACCEL_IAM20680_RANGE;
+        mGyroFsrDps = GYRO_IAM20680_RANGE;
+    } else if (strcmp(chip_ID, "ICM20602") == 0) {
+        mAccelFsrGee = ACCEL_ICM20602_RANGE;
+        mGyroFsrDps = GYRO_ICM20602_RANGE;
+    } else if (strcmp(chip_ID, "ICM42600") == 0) {
+        mAccelFsrGee = ACCEL_ICM42600_RANGE;
+        mGyroFsrDps = GYRO_ICM42600_RANGE;
+    } else if (strcmp(chip_ID, "ICM42686") == 0) {
+        mAccelFsrGee = ACCEL_ICM42686_RANGE;
+        mGyroFsrDps = GYRO_ICM42686_RANGE;
+    } else if (strcmp(chip_ID, "ICM43600") == 0) {
+        mAccelFsrGee = ACCEL_ICM43600_RANGE;
+        mGyroFsrDps = GYRO_ICM43600_RANGE;
+    } else if (strcmp(chip_ID, "ICM45600") == 0) {
+        mAccelFsrGee = ACCEL_ICM45600_RANGE;
+        mGyroFsrDps = GYRO_ICM45600_RANGE;
+    } else {
+        mAccelFsrGee = 16;
+        mGyroFsrDps = 2000;
+    }
 
-    /* set gyro FSR */
-    write_sysfs_int(mpu.gyro_fsr, GYRO_FSR_SYSFS);
-    read_sysfs_int(mpu.gyro_fsr, &mGyroFsrDps); /* read actual fsr */
+    /* set accel FSR: 0:2g 1:4g 2:8g 3:16g 4:32g */
+    int accel_fsr = 0;
+    scale = mAccelFsrGee;
+    while (scale > 2) {
+        ++accel_fsr;
+        scale /= 2;
+    }
+    LOGV_IF(SYSFS_VERBOSE, "HAL:sysfs:echo %d > %s (%lld)",
+            accel_fsr, mpu.accel_fsr, (long long)getTimestamp());
+    ret = write_sysfs_int(mpu.accel_fsr, accel_fsr);
+    if (ret) {
+        LOGE("HAL:Error %d setting accel FSR", ret);
+    }
+
+    /* read accel FSR to calcuate accel scale later */
+    LOGV_IF(SYSFS_VERBOSE,
+            "HAL:sysfs:cat %s (%lld)", mpu.accel_fsr, (long long)getTimestamp());
+    ret = read_sysfs_int(mpu.accel_fsr, &mAccelFsrGee);
+    if (ret) {
+        LOGE("HAL:Error %d reading accel FSR", ret);
+    }
+    LOGV_IF(EXTRA_VERBOSE, "HAL:Accel FSR used %d", mAccelFsrGee);;
+
+    /* set gyro FSR: 0:250dps 1:500dps 2:1000dps 3:2000dps 4:4000dps */
+    int gyro_fsr = 0;
+    scale = mGyroFsrDps;
+    while (scale > 250) {
+        ++gyro_fsr;
+        scale /= 2;
+    }
+    LOGV_IF(SYSFS_VERBOSE, "HAL:sysfs:echo %d > %s (%lld)",
+            gyro_fsr, mpu.gyro_fsr, (long long)getTimestamp());
+    ret = write_sysfs_int(mpu.gyro_fsr, gyro_fsr);
+    if (ret) {
+        LOGE("HAL:Error %d setting gyro FSR", ret);
+    }
+
+    /* read gyro FSR */
+    LOGV_IF(SYSFS_VERBOSE,
+            "HAL:sysfs:cat %s (%lld)", mpu.gyro_fsr, (long long)getTimestamp());
+    ret = read_sysfs_int(mpu.gyro_fsr, &mGyroFsrDps);
+    if (ret) {
+        LOGE("HAL:Error %d reading gyro FSR", ret);
+    }
+    LOGV_IF(EXTRA_VERBOSE, "HAL:Gyro FSR used %d", mGyroFsrDps);
 
     /* reset batch timeout */
     setBatchTimeout(0);
@@ -857,26 +880,20 @@ int MPLSensor::additionalInfoSensorPlacement(int handle, unsigned int seq, senso
 // Internal Temperature event
 int MPLSensor::additionalInfoInternalTemperature(int handle, unsigned int seq, sensors_event_t *event)
 {
-    int temperature;
-    int64_t temp_ts;
     int ret;
 
     switch (handle) {
     case Gyro:
     case Accelerometer:
-        // Push temperature payload
-        ret = inv_read_temperature(&temperature, &temp_ts);
-        if (ret < 0) {
-            return 0;
-        }
-        mChipTemperatureTimestamp[handle] = temp_ts;
+        // Update IMU temperature value
+        updateImuTemperature();
         memset(event, 0, sizeof(*event));
         event->version = sizeof(sensors_event_t);
         event->sensor = handle;
         event->type = SENSOR_TYPE_ADDITIONAL_INFO;
         event->timestamp = seq;
         event->additional_info.type = AINFO_INTERNAL_TEMPERATURE;
-        event->additional_info.data_float[0] = (float)temperature / 100.f;
+        event->additional_info.data_float[0] = (float)mCachedImuTemperature / 100.f;
         ret = 1;
         break;
     default:
@@ -928,6 +945,7 @@ int MPLSensor::additionalInfoHandler(int handle, sensors_event_t* data, int coun
                 numEventReceived++;
                 seq++;
             }
+            mChipTemperatureTimestamp[handle] = getTimestamp();
     }
 
     // Push end frame
@@ -941,11 +959,12 @@ int MPLSensor::additionalInfoHandler(int handle, sensors_event_t* data, int coun
     return numEventReceived;
 }
 
+#ifdef INV_CHIP_TEMPERATURE_REPORT_PERIOD_MS
 int MPLSensor::periodicAdditionalInfoHandler(int handle, sensors_event_t* data, int count)
 {
     VHANDLER_LOG;
 
-    const int64_t timestamp = getTimestamp();
+    const int64_t now = getTimestamp();
     sensors_event_t marker, events[1];
     unsigned int ind = 0;
     unsigned int maxEvents;
@@ -959,11 +978,12 @@ int MPLSensor::periodicAdditionalInfoHandler(int handle, sensors_event_t* data, 
     maxEvents = count - 2;
 
     // forge internal temperature frame
-    if ((timestamp - mChipTemperatureTimestamp[handle]) > ((INV_CHIP_TEMPERATURE_REPORT_PERIOD_MS - 1) * 1000000LL)) {
+    if ((now - mChipTemperatureTimestamp[handle]) > ((INV_CHIP_TEMPERATURE_REPORT_PERIOD_MS - 1) * 1000000LL)) {
         ret = additionalInfoInternalTemperature(handle, ind + 1, &events[ind]);
         if (ret == 1) {
             ++ind;
         }
+        mChipTemperatureTimestamp[handle] = now;
     }
 
     // return immediately if there is no data frame
@@ -997,6 +1017,7 @@ int MPLSensor::periodicAdditionalInfoHandler(int handle, sensors_event_t* data, 
 
     return numEvents;
 }
+#endif
 
 void MPLSensor::getHandle(int32_t handle, int &what, std::string &sname)
 {
@@ -1095,12 +1116,14 @@ int MPLSensor::readEvents(sensors_event_t* data, int count)
                 *data++ = mPendingEvents[i];
                 count--;
                 numEventReceived++;
+#ifdef INV_CHIP_TEMPERATURE_REPORT_PERIOD_MS
                 int sendEvent = periodicAdditionalInfoHandler(i, data, count);
                 if (sendEvent > 0) {
                     data += sendEvent;
                     count -= sendEvent;
                     numEventReceived += sendEvent;
                 }
+#endif
             }
         }
     }
@@ -1227,7 +1250,7 @@ int MPLSensor::readMpuEvents(sensors_event_t* s, int count)
             if (num > 0) {
                 count -= num;
                 numEventReceived += num;
-                if (count == 0)
+                if (count == 0 && ptr >= mIIOReadSize)
                     break;
                 if (count < 0) {
                     LOGW("HAL:sensor_event_t buffer overflow");
@@ -1328,6 +1351,29 @@ int MPLSensor::inv_read_temperature(int *temperature, int64_t *ts)
     return 0;
 }
 
+int MPLSensor::updateImuTemperature()
+{
+    VFUNC_LOG;
+
+    const int64_t now = getTimestamp();
+    const int64_t period = (40LL - 1LL) * 1000000LL;    // 40ms (25Hz), 1ms resolution
+
+    if ((now - mImuTemperatureTimestamp) > period) {
+        int temperature;
+        int64_t ts;
+        int ret;
+
+        ret = inv_read_temperature(&temperature, &ts);
+        if (ret < 0) {
+            return ret;
+        }
+        mCachedImuTemperature = temperature;
+        mImuTemperatureTimestamp = ts;
+    }
+
+    return 0;
+}
+
 int MPLSensor::getFd(void) const
 {
     VFUNC_LOG;
@@ -1406,57 +1452,54 @@ void MPLSensor::fillAccel(const char* accel, struct sensor_t *list)
     unsigned int i;
 
     for (i = 0; i < mNumSensors; i++) {
-        if (list[i].handle == SENSORS_ACCELERATION_HANDLE){
+        if (list[i].handle == SENSORS_ACCELERATION_HANDLE) {
+            list[i].maxRange = mAccelFsrGee * GRAVITY_EARTH;
+            list[i].resolution = mAccelFsrGee * GRAVITY_EARTH / MAX_LSB_DATA;
             if (strcmp(accel, "ICM20648") == 0) {
                 list[i].power = ACCEL_ICM20648_POWER;
                 list[i].minDelay = ACCEL_ICM20648_MINDELAY;
                 list[i].maxDelay = ACCEL_ICM20648_MAXDELAY;
                 list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_ICM20648);
-			} else if (strcmp(accel, "ICM20602") == 0) {
+            } else if (strcmp(accel, "ICM20608D") == 0 || strcmp(accel, "ICM20609I") == 0) {
+                list[i].power = ACCEL_ICM20608D_POWER;
+                list[i].minDelay = ACCEL_ICM20608D_MINDELAY;
+                list[i].maxDelay = ACCEL_ICM20608D_MAXDELAY;
+                list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_ICM20608D);
+	    } else if (strcmp(accel, "ICM20602") == 0) {
                 list[i].power = ACCEL_ICM20602_POWER;
-#ifdef INV_HIFI_HIGH_ODR
-                list[i].minDelay = ACCEL_ICM20602_MINDELAY_HIFI;
-#else
                 list[i].minDelay = ACCEL_ICM20602_MINDELAY;
-#endif
                 list[i].maxDelay = ACCEL_ICM20602_MAXDELAY;
                 list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_ICM20602);
             } else if (strcmp(accel, "ICM20690") == 0) {
                 list[i].power = ACCEL_ICM20690_POWER;
-#ifdef INV_HIFI_HIGH_ODR
-                list[i].minDelay = ACCEL_ICM20690_MINDELAY_HIFI;
-#else
                 list[i].minDelay = ACCEL_ICM20690_MINDELAY;
-#endif
                 list[i].maxDelay = ACCEL_ICM20690_MAXDELAY;
                 list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_ICM20690);
             } else if (strcmp(accel, "IAM20680") == 0) {
                 list[i].power = ACCEL_IAM20680_POWER;
-#ifdef INV_HIFI_HIGH_ODR
-                list[i].minDelay = ACCEL_IAM20680_MINDELAY_HIFI;
-#else
                 list[i].minDelay = ACCEL_IAM20680_MINDELAY;
-#endif
                 list[i].maxDelay = ACCEL_IAM20680_MAXDELAY;
                 list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_IAM20680);
             } else if (strcmp(accel, "ICM42600") == 0) {
                 list[i].power = ACCEL_ICM42600_POWER;
-#ifdef INV_HIFI_HIGH_ODR
-                list[i].minDelay = ACCEL_ICM42600_MINDELAY_HIFI;
-#else
                 list[i].minDelay = ACCEL_ICM42600_MINDELAY;
-#endif
                 list[i].maxDelay = ACCEL_ICM42600_MAXDELAY;
+                list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_ICM42600);
+            }  else if (strcmp(accel, "ICM42686") == 0) {
+                list[i].power = ACCEL_ICM42686_POWER;
+                list[i].minDelay = ACCEL_ICM42686_MINDELAY;
+                list[i].maxDelay = ACCEL_ICM42686_MAXDELAY;
                 list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_ICM42600);
             } else if (strcmp(accel, "ICM43600") == 0) {
                 list[i].power = ACCEL_ICM43600_POWER;
-#ifdef INV_HIFI_HIGH_ODR
-                list[i].minDelay = ACCEL_ICM43600_MINDELAY_HIFI;
-#else
                 list[i].minDelay = ACCEL_ICM43600_MINDELAY;
-#endif
                 list[i].maxDelay = ACCEL_ICM43600_MAXDELAY;
                 list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_ICM43600);
+            } else if (strcmp(accel, "ICM45600") == 0) {
+                list[i].power = ACCEL_ICM45600_POWER;
+                list[i].minDelay = ACCEL_ICM45600_MINDELAY;
+                list[i].maxDelay = ACCEL_ICM45600_MAXDELAY;
+                list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_ICM45600);
             }
         }
     }
@@ -1470,57 +1513,54 @@ void MPLSensor::fillGyro(const char* gyro, struct sensor_t *list)
     unsigned int i;
 
     for (i = 0; i < mNumSensors; i++) {
-        if (list[i].handle == SENSORS_GYROSCOPE_HANDLE){
+        if (list[i].handle == SENSORS_GYROSCOPE_HANDLE) {
+            list[i].maxRange = mGyroFsrDps * M_PI / 180.0f;
+            list[i].resolution = mGyroFsrDps * M_PI / (180.0f * MAX_LSB_DATA);
             if (strcmp(gyro, "ICM20648") == 0) {
                 list[i].power = GYRO_ICM20648_POWER;
                 list[i].minDelay = GYRO_ICM20648_MINDELAY;
                 list[i].maxDelay = GYRO_ICM20648_MAXDELAY;
                 list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_ICM20648);
+            } else if (strcmp(gyro, "ICM20608D") == 0 || strcmp(gyro, "ICM20609I") == 0) {
+                list[i].power = GYRO_ICM20608D_POWER;
+                list[i].minDelay = GYRO_ICM20608D_MINDELAY;
+                list[i].maxDelay = GYRO_ICM20608D_MAXDELAY;
+                list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_ICM20608D);
             } else if (strcmp(gyro, "ICM20602") == 0) {
                 list[i].power = GYRO_ICM20602_POWER;
-#ifdef INV_HIFI_HIGH_ODR
-                list[i].minDelay = GYRO_ICM20602_MINDELAY_HIFI;
-#else
                 list[i].minDelay = GYRO_ICM20602_MINDELAY;
-#endif
                 list[i].maxDelay = GYRO_ICM20602_MAXDELAY;
                 list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_ICM20602);
             } else if (strcmp(gyro, "ICM20690") == 0) {
                 list[i].power = GYRO_ICM20690_POWER;
-#ifdef INV_HIFI_HIGH_ODR
-                list[i].minDelay = GYRO_ICM20690_MINDELAY_HIFI;
-#else
                 list[i].minDelay = GYRO_ICM20690_MINDELAY;
-#endif
                 list[i].maxDelay = GYRO_ICM20690_MAXDELAY;
                 list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_ICM20690);
             } else if (strcmp(gyro, "IAM20680") == 0) {
                 list[i].power = GYRO_IAM20680_POWER;
-#ifdef INV_HIFI_HIGH_ODR
-                list[i].minDelay = GYRO_IAM20680_MINDELAY_HIFI;
-#else
                 list[i].minDelay = GYRO_IAM20680_MINDELAY;
-#endif
                 list[i].maxDelay = GYRO_IAM20680_MAXDELAY;
                 list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_IAM20680);
             } else if (strcmp(gyro, "ICM42600") == 0) {
                 list[i].power = GYRO_ICM42600_POWER;
-#ifdef INV_HIFI_HIGH_ODR
-                list[i].minDelay = GYRO_ICM42600_MINDELAY_HIFI;
-#else
                 list[i].minDelay = GYRO_ICM42600_MINDELAY;
-#endif
                 list[i].maxDelay = GYRO_ICM42600_MAXDELAY;
+                list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_ICM42600);
+            } else if (strcmp(gyro, "ICM42686") == 0) {
+                list[i].power = GYRO_ICM42686_POWER;
+                list[i].minDelay = GYRO_ICM42686_MINDELAY;
+                list[i].maxDelay = GYRO_ICM42686_MAXDELAY;
                 list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_ICM42600);
             } else if (strcmp(gyro, "ICM43600") == 0) {
                 list[i].power = GYRO_ICM43600_POWER;
-#ifdef INV_HIFI_HIGH_ODR
-                list[i].minDelay = GYRO_ICM43600_MINDELAY_HIFI;
-#else
                 list[i].minDelay = GYRO_ICM43600_MINDELAY;
-#endif
                 list[i].maxDelay = GYRO_ICM43600_MAXDELAY;
                 list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_ICM43600);
+            } else if (strcmp(gyro, "ICM45600") == 0) {
+                list[i].power = GYRO_ICM45600_POWER;
+                list[i].minDelay = GYRO_ICM45600_MINDELAY;
+                list[i].maxDelay = GYRO_ICM45600_MAXDELAY;
+                list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_ICM45600);
             }
         }
     }

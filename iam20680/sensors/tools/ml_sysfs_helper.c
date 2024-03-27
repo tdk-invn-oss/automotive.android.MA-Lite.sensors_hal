@@ -55,12 +55,14 @@ static char *chip_name[] = {
     "ICM10340",
     "ICM20648",
     "ICM20608D",
+    "ICM20609I",
     "ICM20602",
     "ICM20690",
     "IAM20680",
-    "ICM40600",
     "ICM42600",
+    "ICM42686",
     "ICM43600",
+    "ICM45600",
 };
 static int chip_ind;
 static int initialized =0;

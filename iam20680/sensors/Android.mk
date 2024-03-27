@@ -21,7 +21,7 @@ include $(LOCAL_PATH)/invensense.mk
 # InvenSense Sensors HAL
 include $(CLEAR_VARS)
 
-LOCAL_MODULE := sensors.$(INVENSENSE_CHIP)
+LOCAL_MODULE := sensors.invensense
 LOCAL_MODULE_OWNER := invensense
 LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE_RELATIVE_PATH := hw

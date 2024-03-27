@@ -4,8 +4,8 @@ INV_INCLUDES :=
 INV_SRCS :=
 
 # Version
-INV_VERSION_MAJOR := 13
-INV_VERSION_MINOR := 2
+INV_VERSION_MAJOR := 14
+INV_VERSION_MINOR := 0
 INV_VERSION_PATCH := 0
 INV_VERSION_SUFFIX := -simple
 $(info InvenSense MA-Lite version $(INV_VERSION_MAJOR).$(INV_VERSION_MINOR).$(INV_VERSION_PATCH)$(INV_VERSION_SUFFIX))
@@ -13,69 +13,6 @@ INV_CFLAGS += -DINV_VERSION_MAJOR=$(INV_VERSION_MAJOR)
 INV_CFLAGS += -DINV_VERSION_MINOR=$(INV_VERSION_MINOR)
 INV_CFLAGS += -DINV_VERSION_PATCH=$(INV_VERSION_PATCH)
 INV_CFLAGS += -DINV_VERSION_SUFFIX=\"$(INV_VERSION_SUFFIX)\"
-
-# InvenSense chip type
-ifndef INVENSENSE_CHIP
-$(info missing INVENSENSE_CHIP, select from: iam20680, icm20602, icm20690, icm40609d, icm42600, icm42686, icm42688, icm43600)
-$(info Note: select icm42600 for icm40607/40608, select icm43600 for icm42607/42608/42670/42671)
-$(warning Using by default iam20680)
-INVENSENSE_CHIP := iam20680
-endif
-$(info InvenSense chip = $(INVENSENSE_CHIP))
-
-# Automotive gyro 250dps setting
-ifneq (,$(filter $(INVENSENSE_CHIP), iam20680))
-INV_CFLAGS += -DINV_GYRO_250DPS
-endif
-
-# ODR configuration according to chip type
-# Define for devices with SMPLRT_DIV register
-ifneq (,$(filter $(INVENSENSE_CHIP), iam20680 icm20602 icm20690))
-INV_CFLAGS += -DODR_SMPLRT_DIV
-endif
-
-# Enhanced Accel FSR support (32g)
-ifneq (,$(filter $(INVENSENSE_CHIP), icm42686 icm40609d))
-INV_CFLAGS += -DACCEL_ENHANCED_FSR_SUPPORT
-endif
-
-# Enhanced Gyro FSR support (4000dps)
-ifneq (,$(filter $(INVENSENSE_CHIP), icm42686))
-INV_CFLAGS += -DGYRO_ENHANCED_FSR_SUPPORT
-endif
-
-# FIFO high resolution mode
-ifneq (,$(filter $(INVENSENSE_CHIP), icm42686 icm42688))
-INV_CFLAGS += -DFIFO_HIGH_RES_ENABLE
-endif
-
-# HiFi support
-ifneq (,$(filter $(INVENSENSE_CHIP), icm20602 icm20690 icm40609d icm42600 icm42686 icm42688 iim42600 icm43600))
-INV_CFLAGS += -DINV_HIFI_ACCEL_16G
-INV_CFLAGS += -DINV_HIFI_HIGH_ODR
-endif
-
-# Compass support
-# Set true to support Compass
-COMPASS_SUPPORT := false
-ifeq ($(findstring ak, $(INVENSENSE_SENSORS)), ak)
-COMPASS_SUPPORT := true
-endif
-ifeq ($(COMPASS_SUPPORT), true)
-INV_CFLAGS += -DCOMPASS_SUPPORT
-endif
-$(info InvenSense Compass support = $(COMPASS_SUPPORT))
-
-# Pressure support
-# Set true to support Pressure
-PRESSURE_SUPPORT := false
-ifeq ($(findstring icp, $(INVENSENSE_SENSORS)), icp)
-PRESSURE_SUPPORT := true
-endif
-ifeq ($(PRESSURE_SUPPORT), true)
-INV_CFLAGS += -DPRESSURE_SUPPORT
-endif
-$(info InvenSense Pressure support = $(PRESSURE_SUPPORT))
 
 INV_SRCS += SensorsMain.cpp
 INV_SRCS += SensorBase.cpp

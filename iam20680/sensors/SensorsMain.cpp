@@ -114,16 +114,18 @@ private:
 sensors_poll_context_t::sensors_poll_context_t() {
     VFUNC_LOG;
 
-#ifdef COMPASS_SUPPORT
     mCompassSensor = new CompassSensor();
-#else
-    mCompassSensor = NULL;
-#endif
-#ifdef PRESSURE_SUPPORT
+    if (!mCompassSensor->isSensorPresent()) {
+        delete mCompassSensor;
+        mCompassSensor = nullptr;
+    }
+
     mPressureSensor = new PressureSensor();
-#else
-    mPressureSensor = NULL;
-#endif
+    if (!mPressureSensor->isSensorPresent()) {
+        delete mPressureSensor;
+        mPressureSensor = nullptr;
+    }
+
     MPLSensor *mplSensor = new MPLSensor(mCompassSensor, mPressureSensor);
 
     // populate the sensor list

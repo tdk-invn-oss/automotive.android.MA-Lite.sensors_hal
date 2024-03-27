@@ -155,6 +155,7 @@ private:
     void fillAccel(const char* accel, struct sensor_t *list);
     void fillGyro(const char* gyro, struct sensor_t *list);
     int inv_read_temperature(int *temperature, int64_t *ts);
+    int updateImuTemperature();
 
     pthread_mutex_t mHALMutex;
     bool mChipDetected;
@@ -192,12 +193,14 @@ private:
     int mCachedAccelData[3];
     int mCachedCompassData[3];
     int mCachedPressureData;
+    int mCachedImuTemperature;
 
     /* timestamp */
     int64_t mGyroSensorTimestamp;
     int64_t mAccelSensorTimestamp;
     int64_t mCompassTimestamp;
     int64_t mPressureTimestamp;
+    int64_t mImuTemperatureTimestamp;
     int64_t mChipTemperatureTimestamp[TotalNumSensors];
     int64_t mGyroSensorPrevTimestamp;
     int64_t mAccelSensorPrevTimestamp;
