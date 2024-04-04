@@ -1,0 +1,57 @@
+// Copyright (C) 2022 InvenSense, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Sensors SubHal V2.1
+cc_library_shared {
+    name: "android.hardware.sensors@2.1-multihal-invensense",
+    relative_install_path: "hw",
+    vendor: true,
+    srcs: [
+        "SensorsSubHalV2_1.cpp",
+    ],
+    header_libs: [
+        "android.hardware.sensors@2.X-multihal.header",
+        "android.hardware.sensors@2.X-shared-utils",
+    ],
+    static_libs: [
+        "android.hardware.sensors@1.0-convert",
+    ],
+    shared_libs: [
+        "android.hardware.sensors@1.0",
+        "android.hardware.sensors@2.0",
+        "android.hardware.sensors@2.0-ScopedWakelock",
+        "android.hardware.sensors@2.1",
+        "libcutils",
+        "libfmq",
+        "libhardware",
+        "libhidlbase",
+        "liblog",
+        "libpower",
+        "libbase",
+        "libutils",
+    ],
+    cflags: [
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-DLOG_TAG=\"InvnSensorsSubHalV2_1\"",
+        "-DNDEBUG",
+        "-DINV_VERSION_MAJOR=1",
+        "-DINV_VERSION_MINOR=0",
+        "-DINV_VERSION_PATCH=0",
+        "-DINV_VERSION_SUFFIX=\"\"",
+    ],
+    owner: "invensense",
+}
+
