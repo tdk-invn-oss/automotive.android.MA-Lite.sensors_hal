@@ -346,7 +346,16 @@ int CompassSensor::setDelay(int32_t handle, int64_t ns)
         ns = mMaxDelay;
 
     freq = 1000000000.0 / ns;
-    freq_int = (int)ceil(freq);
+    /* try rounding if it respects Android 90% spec, otherwise round upper */
+    freq_int = (int)round(freq);
+    if (freq_int < (freq * 0.9)) {
+        freq_int = (int)ceil(freq);
+    }
+    ns = 1000000000LL / freq_int;
+
+    if (ns == mDelay) {
+        return 0;
+    }
 
     LOGV_IF(SYSFS_VERBOSE, "HAL:sysfs:echo %d > %s (%" PRId64 ")",
             freq_int, compassSysFs[COMPASS_RATE], getTimestamp());
@@ -383,11 +392,9 @@ int CompassSensor::readSample(int *data, int64_t *timestamp) {
     double sample;
     struct inv_iio_buffer_channel *channel;
     ssize_t address;
-#ifdef INV_HIFI_SUPPORT
     const int64_t delay_min = mDelay * 98LL / 100LL;
     const int64_t delay_max = mDelay * 102LL / 100LL;
     int64_t delta;
-#endif
 
     ssize_t size = read(dev_fd, rdata, compassBufferScan.size);
     if (size < 0) {
@@ -416,7 +423,6 @@ int CompassSensor::readSample(int *data, int64_t *timestamp) {
             *timestamp = 0;
         } else {
             raw = inv_iio_buffer_channel_get_data(channel, &rdata[address]);
-#ifdef INV_HIFI_SUPPORT
             if (mTimestamp != 0) {
                 delta = raw - mTimestamp;
                 if (delta > delay_max) {
@@ -427,9 +433,7 @@ int CompassSensor::readSample(int *data, int64_t *timestamp) {
                     delta = delay_min;
                 }
                 mTimestamp += delta;
-            } else
-#endif
-            {
+            } else {
                 mTimestamp = raw;
             }
             *timestamp = mTimestamp;

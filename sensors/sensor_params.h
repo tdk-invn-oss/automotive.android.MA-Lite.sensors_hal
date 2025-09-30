@@ -89,7 +89,7 @@
 // ACCEL IAM20680
 #define ACCEL_IAM20680_RANGE             (8)
 #define ACCEL_IAM20680_POWER             (0.5f)
-#define ACCEL_IAM20680_MINDELAY          (2000)
+#define ACCEL_IAM20680_MINDELAY          (5000)
 #define ACCEL_IAM20680_MAXDELAY          (250000)
 //ACCEL ICM20648
 #define ACCEL_ICM20648_RANGE             (8)
@@ -134,9 +134,9 @@
 #define GYRO_ICM20608D_MINDELAY          (5000)
 #define GYRO_ICM20608D_MAXDELAY          (1000000)
 //GYRO IAM20680
-#define GYRO_IAM20680_RANGE              (2000)
+#define GYRO_IAM20680_RANGE              (250)
 #define GYRO_IAM20680_POWER              (3.f)
-#define GYRO_IAM20680_MINDELAY           (2000)
+#define GYRO_IAM20680_MINDELAY           (5000)
 #define GYRO_IAM20680_MAXDELAY           (250000)
 //GYRO ICM20648
 #define GYRO_ICM20648_RANGE              (2000)
@@ -189,13 +189,13 @@
 /******************************************/
 // FIFO_SIZE
 #define FIFO_SIZE_COMPUTE(_sz)    ((_sz) * 7 / 10 / 6)
-#define FIFO_SIZE_IAM20680        512
+#define FIFO_SIZE_IAM20680        0
 #define FIFO_SIZE_ICM20648        512
 #define FIFO_SIZE_ICM20608D       512
 #define FIFO_SIZE_ICM20602        1024
 #define FIFO_SIZE_ICM20690        1024
 #define FIFO_SIZE_ICM42600        2048
 #define FIFO_SIZE_ICM43600        1024
-#define FIFO_SIZE_ICM45600        2048
+#define FIFO_SIZE_ICM45600        4096
 
 #endif  /* INV_SENSOR_PARAMS_H */

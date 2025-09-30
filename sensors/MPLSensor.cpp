@@ -164,6 +164,7 @@ MPLSensor::MPLSensor(CompassSensor *compass, PressureSensor *pressure)
     if (inv_get_chip_name(chip_ID) != INV_SUCCESS) {
         LOGE("HAL:ERR Failed to get chip ID\n");
         mChipDetected = false;
+        return;
     } else {
         LOGI("HAL:Chip ID is %s\n", chip_ID);
         mChipDetected = true;
@@ -394,7 +395,7 @@ void MPLSensor::inv_set_device_properties(void)
 
     /* gyro/accel mount matrix */
     inv_get_sensors_orientation();
-	
+
     if (mCompassSensor) {
         /* compass mount matrix */
         mCompassSensor->getOrientationMatrix(mCompassOrientationMatrix);
@@ -487,7 +488,6 @@ void MPLSensor::inv_write_sysfs(uint32_t delay, char *sysfs_rate)
     LOGV_IF(SYSFS_VERBOSE, "HAL:sysfs:echo %.0f > %s (%lld)",
         NS_PER_SECOND_FLOAT / delay, sysfs_rate, (long long)getTimestamp());
     write_sysfs_int(sysfs_rate, NS_PER_SECOND_FLOAT / delay);
-	
 }
 
 void MPLSensor::setGyroRate(uint64_t delay)
@@ -579,6 +579,9 @@ int MPLSensor::enable(int32_t handle, int en)
         LOGV_IF(ENG_VERBOSE, "HAL:can't find handle %d",handle);
         return -EINVAL;
     }
+
+    pthread_mutex_lock(&mHALMutex);
+
     if (!en)
         mBatchEnabled &= ~(1LL << what);
     if (mEnabled == 0) {
@@ -600,9 +603,7 @@ int MPLSensor::enable(int32_t handle, int en)
             what);
 
     if (en) {
-        pthread_mutex_lock(&mHALMutex);
         mAdditionalInfoEnabledVector.push_back(handle);
-        pthread_mutex_unlock(&mHALMutex);
     }
 
     if (((newState) << what) != (mEnabled & (1LL << what))) {
@@ -633,6 +634,7 @@ int MPLSensor::enable(int32_t handle, int en)
 
     updateBatchTimeout();
 
+    pthread_mutex_unlock(&mHALMutex);
     return err;
 }
 
@@ -648,13 +650,14 @@ void MPLSensor::setBatchTimeout(int64_t timeout_ns)
 
 void MPLSensor::updateBatchTimeout(void)
 {
+    int sensors[] = {Gyro, Accelerometer};
     int64_t batchingTimeout = 100000000000LL;
     int64_t ns = 0;
 
     if (mBatchEnabled) {
-        for (uint32_t i = 0; i < TotalNumSensors; i++) {
-            if (mEnabled & (1LL << i)) {
-                if (mBatchEnabled & (1LL << i))
+        for (uint32_t i = 0; i < ARRAY_SIZE(sensors); i++) {
+            if (mEnabled & (1LL << sensors[i])) {
+                if (mBatchEnabled & (1LL << sensors[i]))
                     ns = mBatchTimeouts[i];
                 else
                     ns = 0;
@@ -1025,10 +1028,6 @@ void MPLSensor::getHandle(int32_t handle, int &what, std::string &sname)
 
     what = -1;
 
-    if (handle >= ID_NUMBER) {
-        LOGV_IF(PROCESS_VERBOSE, "HAL:handle over = %d",handle);
-        return;
-    }
     switch (handle) {
         case ID_G:
             what = Gyro;
@@ -1039,17 +1038,24 @@ void MPLSensor::getHandle(int32_t handle, int &what, std::string &sname)
             sname = "Accelerometer";
             break;
         case ID_M:
+            if (mCompassSensor == nullptr) {
+                LOGV_IF(PROCESS_VERBOSE, "HAL:handle invalid handle %d", handle);
+                return;
+            }
             what = MagneticField;
             sname = "MagneticField";
             break;
         case ID_PS:
+            if (mPressureSensor == nullptr) {
+                LOGV_IF(PROCESS_VERBOSE, "HAL:handle invalid handle %d", handle);
+                return;
+            }
             what = Pressure;
             sname = "Pressure";
             break;
         default:
-            what = handle;
-            sname = "Others";
-            break;
+            LOGV_IF(PROCESS_VERBOSE, "HAL:handle invalid handle %d", handle);
+            return;
     }
     LOGI_IF(PROCESS_VERBOSE, "HAL:getHandle - what=%d, sname=%s",
             what,
@@ -1077,9 +1083,7 @@ int MPLSensor::readEvents(sensors_event_t* data, int count)
             count -= sendEvent;
             numEventReceived += sendEvent;
         }
-        pthread_mutex_lock(&mHALMutex);
         mAdditionalInfoEnabledVector.erase(mAdditionalInfoEnabledVector.begin());
-        pthread_mutex_unlock(&mHALMutex);
     }
 
     // handle flush complete event
@@ -1099,13 +1103,9 @@ int MPLSensor::readEvents(sensors_event_t* data, int count)
             numEventReceived += sendEvent;
         } else {
             // save sensor to send info later
-            pthread_mutex_lock(&mHALMutex);
             mAdditionalInfoEnabledVector.push_back(sensor);
-            pthread_mutex_unlock(&mHALMutex);
         }
-        pthread_mutex_lock(&mHALMutex);
         mFlushSensorEnabledVector.erase(mFlushSensorEnabledVector.begin());
-        pthread_mutex_unlock(&mHALMutex);
     }
 
     for (int i = 0; i < ID_NUMBER; i++) {
@@ -1144,10 +1144,13 @@ int MPLSensor::readMpuEvents(sensors_event_t* s, int count)
     int left_over = 0;
     bool data_found;
 
+    pthread_mutex_lock(&mHALMutex);
+
     if (mEnabled == 0) {
         /* no sensor is enabled. read out all leftover */
         rsize = read(iio_fd, mIIOReadBuffer, sizeof(mIIOReadBuffer));
         mIIOReadSize = 0;
+        pthread_mutex_unlock(&mHALMutex);
         return 0;
     }
 
@@ -1170,10 +1173,12 @@ int MPLSensor::readMpuEvents(sensors_event_t* s, int count)
     LOGV_IF(PROCESS_VERBOSE, "HAL: nbytes=%d rsize=%d", nbytes, rsize);
     if (rsize < 0) {
         LOGE("HAL:failed to read IIO.  nbytes=%d rsize=%d", nbytes, rsize);
+        pthread_mutex_unlock(&mHALMutex);
         return 0;
     }
     if (rsize == 0) {
         LOGI("HAL:no data from IIO.");
+        pthread_mutex_unlock(&mHALMutex);
         return 0;
     }
 
@@ -1272,6 +1277,7 @@ int MPLSensor::readMpuEvents(sensors_event_t* s, int count)
         mIIOReadSize = 0;
     }
 
+    pthread_mutex_unlock(&mHALMutex);
     return numEventReceived;
 }
 
@@ -1285,6 +1291,7 @@ int MPLSensor::readCompassEvents(sensors_event_t* s, int count)
         count = COMPASS_SEN_EVENT_RESV_SZ;
 
     if (mCompassSensor) {
+        pthread_mutex_lock(&mHALMutex);
         mCompassSensor->readSample(mCachedCompassData, &mCompassTimestamp);
         int num = readEvents(&s[numEventReceived], count);
         if (num > 0) {
@@ -1293,6 +1300,7 @@ int MPLSensor::readCompassEvents(sensors_event_t* s, int count)
             if (count < 0)
                 LOGW("HAL:sensor_event_t buffer overflow");
         }
+        pthread_mutex_unlock(&mHALMutex);
     }
     return numEventReceived;
 }
@@ -1307,6 +1315,7 @@ int MPLSensor::readPressureEvents(sensors_event_t* s, int count)
         count = PRESSURE_SEN_EVENT_RESV_SZ;
 
     if (mPressureSensor) {
+        pthread_mutex_lock(&mHALMutex);
         mPressureSensor->readSample(&mCachedPressureData, &mPressureTimestamp);
         int num = readEvents(&s[numEventReceived], count);
         if (num > 0) {
@@ -1315,6 +1324,7 @@ int MPLSensor::readPressureEvents(sensors_event_t* s, int count)
             if (count < 0)
                 LOGW("HAL:sensor_event_t buffer overflow");
         }
+        pthread_mutex_unlock(&mHALMutex);
     }
     return numEventReceived;
 }
@@ -1403,6 +1413,11 @@ int MPLSensor::populateSensorList(struct sensor_t *list, int len)
 
     int listSize;
     int maxNumSensors;
+
+    if (!mChipDetected) {
+        mNumSensors = 0;
+        return 0;
+    }
 
     /* base sensor list */
     listSize = sizeof(sRawSensorList);
@@ -1685,6 +1700,8 @@ int MPLSensor::batch(int handle, int flags, int64_t period_ns, int64_t timeout)
         return -EINVAL;
     }
 
+    pthread_mutex_lock(&mHALMutex);
+
     /* find sensor_t struct for this sensor */
     for (i = 0; i < mNumSensors; i++) {
         if (handle == mCurrentSensorList[i].handle) {
@@ -1716,6 +1733,7 @@ int MPLSensor::batch(int handle, int flags, int64_t period_ns, int64_t timeout)
 
     /* return from here when dry run */
     if (flags & SENSORS_BATCH_DRY_RUN) {
+        pthread_mutex_unlock(&mHALMutex);
         return 0;
     }
 
@@ -1742,6 +1760,8 @@ int MPLSensor::batch(int handle, int flags, int64_t period_ns, int64_t timeout)
             setPressureRate(period_ns);
             break;
     }
+
+    pthread_mutex_unlock(&mHALMutex);
     return 0;
 }
 
@@ -1761,7 +1781,10 @@ int MPLSensor::flush(int handle)
         return -EINVAL;
     }
 
+    pthread_mutex_lock(&mHALMutex);
+
     if (!(mEnabled & (1LL << what))) {
+        pthread_mutex_unlock(&mHALMutex);
         return -EINVAL;
     }
 
@@ -1775,5 +1798,6 @@ int MPLSensor::flush(int handle)
         LOGE("HAL:ERR can't write flush_batch");
     }
 
+    pthread_mutex_unlock(&mHALMutex);
     return 0;
 }
