@@ -115,7 +115,12 @@
 #define ACCEL_ICM45600_RANGE             (16)
 #define ACCEL_ICM45600_POWER             (0.35f)
 #define ACCEL_ICM45600_MINDELAY          (1250)
-#define ACCEL_ICM45600_MAXDELAY          (80000)
+#define ACCEL_ICM45600_MAXDELAY          (160000)
+//ACCEL ICM53600
+#define ACCEL_ICM53600_RANGE             (16)
+#define ACCEL_ICM53600_POWER             (0.35f)
+#define ACCEL_ICM53600_MINDELAY          (1250)
+#define ACCEL_ICM53600_MAXDELAY          (320000)
 
 /******************************************/
 //GYRO ICM20602
@@ -163,6 +168,11 @@
 #define GYRO_ICM45600_POWER              (0.75f)
 #define GYRO_ICM45600_MINDELAY           (1250)
 #define GYRO_ICM45600_MAXDELAY           (80000)
+//GYRO ICM53600
+#define GYRO_ICM53600_RANGE              (2000)
+#define GYRO_ICM53600_POWER              (0.75f)
+#define GYRO_ICM53600_MINDELAY           (1250)
+#define GYRO_ICM53600_MAXDELAY           (80000)
 
 /******************************************/
 //PRESSURE BMP280
@@ -187,15 +197,15 @@
 #define PROXIMITY_APS9930_MAXDELAY              (1000000)
 
 /******************************************/
-// FIFO_SIZE
-#define FIFO_SIZE_COMPUTE(_sz)    ((_sz) * 7 / 10 / 6)
-#define FIFO_SIZE_IAM20680        0
-#define FIFO_SIZE_ICM20648        512
-#define FIFO_SIZE_ICM20608D       512
-#define FIFO_SIZE_ICM20602        1024
-#define FIFO_SIZE_ICM20690        1024
-#define FIFO_SIZE_ICM42600        2048
-#define FIFO_SIZE_ICM43600        1024
-#define FIFO_SIZE_ICM45600        4096
+// BATCH_SIZE
+#define BATCH_SIZE_IAM20680       0
+#define BATCH_SIZE_ICM20648       56
+#define BATCH_SIZE_ICM20608D      56
+#define BATCH_SIZE_ICM20602       110
+#define BATCH_SIZE_ICM20690       112
+#define BATCH_SIZE_ICM42600       112
+#define BATCH_SIZE_ICM43600       55
+#define BATCH_SIZE_ICM45600       480
+#define BATCH_SIZE_ICM53600       55
 
 #endif  /* INV_SENSOR_PARAMS_H */

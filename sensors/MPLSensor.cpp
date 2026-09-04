@@ -1474,47 +1474,52 @@ void MPLSensor::fillAccel(const char* accel, struct sensor_t *list)
                 list[i].power = ACCEL_ICM20648_POWER;
                 list[i].minDelay = ACCEL_ICM20648_MINDELAY;
                 list[i].maxDelay = ACCEL_ICM20648_MAXDELAY;
-                list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_ICM20648);
+                list[i].fifoMaxEventCount = BATCH_SIZE_ICM20648;
             } else if (strcmp(accel, "ICM20608D") == 0 || strcmp(accel, "ICM20609I") == 0) {
                 list[i].power = ACCEL_ICM20608D_POWER;
                 list[i].minDelay = ACCEL_ICM20608D_MINDELAY;
                 list[i].maxDelay = ACCEL_ICM20608D_MAXDELAY;
-                list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_ICM20608D);
+                list[i].fifoMaxEventCount = BATCH_SIZE_ICM20608D;
 	    } else if (strcmp(accel, "ICM20602") == 0) {
                 list[i].power = ACCEL_ICM20602_POWER;
                 list[i].minDelay = ACCEL_ICM20602_MINDELAY;
                 list[i].maxDelay = ACCEL_ICM20602_MAXDELAY;
-                list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_ICM20602);
+                list[i].fifoMaxEventCount = BATCH_SIZE_ICM20602;
             } else if (strcmp(accel, "ICM20690") == 0) {
                 list[i].power = ACCEL_ICM20690_POWER;
                 list[i].minDelay = ACCEL_ICM20690_MINDELAY;
                 list[i].maxDelay = ACCEL_ICM20690_MAXDELAY;
-                list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_ICM20690);
+                list[i].fifoMaxEventCount = BATCH_SIZE_ICM20690;
             } else if (strcmp(accel, "IAM20680") == 0) {
                 list[i].power = ACCEL_IAM20680_POWER;
                 list[i].minDelay = ACCEL_IAM20680_MINDELAY;
                 list[i].maxDelay = ACCEL_IAM20680_MAXDELAY;
-                list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_IAM20680);
+                list[i].fifoMaxEventCount = BATCH_SIZE_IAM20680;
             } else if (strcmp(accel, "ICM42600") == 0) {
                 list[i].power = ACCEL_ICM42600_POWER;
                 list[i].minDelay = ACCEL_ICM42600_MINDELAY;
                 list[i].maxDelay = ACCEL_ICM42600_MAXDELAY;
-                list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_ICM42600);
+                list[i].fifoMaxEventCount = BATCH_SIZE_ICM42600;
             }  else if (strcmp(accel, "ICM42686") == 0) {
                 list[i].power = ACCEL_ICM42686_POWER;
                 list[i].minDelay = ACCEL_ICM42686_MINDELAY;
                 list[i].maxDelay = ACCEL_ICM42686_MAXDELAY;
-                list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_ICM42600);
+                list[i].fifoMaxEventCount = BATCH_SIZE_ICM42600;
             } else if (strcmp(accel, "ICM43600") == 0) {
                 list[i].power = ACCEL_ICM43600_POWER;
                 list[i].minDelay = ACCEL_ICM43600_MINDELAY;
                 list[i].maxDelay = ACCEL_ICM43600_MAXDELAY;
-                list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_ICM43600);
+                list[i].fifoMaxEventCount = BATCH_SIZE_ICM43600;
             } else if (strcmp(accel, "ICM45600") == 0) {
                 list[i].power = ACCEL_ICM45600_POWER;
                 list[i].minDelay = ACCEL_ICM45600_MINDELAY;
                 list[i].maxDelay = ACCEL_ICM45600_MAXDELAY;
-                list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_ICM45600);
+                list[i].fifoMaxEventCount = BATCH_SIZE_ICM45600;
+            } else if (strcmp(accel, "ICM53600") == 0) {
+                list[i].power = ACCEL_ICM53600_POWER;
+                list[i].minDelay = ACCEL_ICM53600_MINDELAY;
+                list[i].maxDelay = ACCEL_ICM53600_MAXDELAY;
+                list[i].fifoMaxEventCount = BATCH_SIZE_ICM53600;
             }
         }
     }
@@ -1535,47 +1540,52 @@ void MPLSensor::fillGyro(const char* gyro, struct sensor_t *list)
                 list[i].power = GYRO_ICM20648_POWER;
                 list[i].minDelay = GYRO_ICM20648_MINDELAY;
                 list[i].maxDelay = GYRO_ICM20648_MAXDELAY;
-                list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_ICM20648);
+                list[i].fifoMaxEventCount = BATCH_SIZE_ICM20648;
             } else if (strcmp(gyro, "ICM20608D") == 0 || strcmp(gyro, "ICM20609I") == 0) {
                 list[i].power = GYRO_ICM20608D_POWER;
                 list[i].minDelay = GYRO_ICM20608D_MINDELAY;
                 list[i].maxDelay = GYRO_ICM20608D_MAXDELAY;
-                list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_ICM20608D);
+                list[i].fifoMaxEventCount = BATCH_SIZE_ICM20608D;
             } else if (strcmp(gyro, "ICM20602") == 0) {
                 list[i].power = GYRO_ICM20602_POWER;
                 list[i].minDelay = GYRO_ICM20602_MINDELAY;
                 list[i].maxDelay = GYRO_ICM20602_MAXDELAY;
-                list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_ICM20602);
+                list[i].fifoMaxEventCount = BATCH_SIZE_ICM20602;
             } else if (strcmp(gyro, "ICM20690") == 0) {
                 list[i].power = GYRO_ICM20690_POWER;
                 list[i].minDelay = GYRO_ICM20690_MINDELAY;
                 list[i].maxDelay = GYRO_ICM20690_MAXDELAY;
-                list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_ICM20690);
+                list[i].fifoMaxEventCount = BATCH_SIZE_ICM20690;
             } else if (strcmp(gyro, "IAM20680") == 0) {
                 list[i].power = GYRO_IAM20680_POWER;
                 list[i].minDelay = GYRO_IAM20680_MINDELAY;
                 list[i].maxDelay = GYRO_IAM20680_MAXDELAY;
-                list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_IAM20680);
+                list[i].fifoMaxEventCount = BATCH_SIZE_IAM20680;
             } else if (strcmp(gyro, "ICM42600") == 0) {
                 list[i].power = GYRO_ICM42600_POWER;
                 list[i].minDelay = GYRO_ICM42600_MINDELAY;
                 list[i].maxDelay = GYRO_ICM42600_MAXDELAY;
-                list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_ICM42600);
+                list[i].fifoMaxEventCount = BATCH_SIZE_ICM42600;
             } else if (strcmp(gyro, "ICM42686") == 0) {
                 list[i].power = GYRO_ICM42686_POWER;
                 list[i].minDelay = GYRO_ICM42686_MINDELAY;
                 list[i].maxDelay = GYRO_ICM42686_MAXDELAY;
-                list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_ICM42600);
+                list[i].fifoMaxEventCount = BATCH_SIZE_ICM42600;
             } else if (strcmp(gyro, "ICM43600") == 0) {
                 list[i].power = GYRO_ICM43600_POWER;
                 list[i].minDelay = GYRO_ICM43600_MINDELAY;
                 list[i].maxDelay = GYRO_ICM43600_MAXDELAY;
-                list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_ICM43600);
+                list[i].fifoMaxEventCount = BATCH_SIZE_ICM43600;
             } else if (strcmp(gyro, "ICM45600") == 0) {
                 list[i].power = GYRO_ICM45600_POWER;
                 list[i].minDelay = GYRO_ICM45600_MINDELAY;
                 list[i].maxDelay = GYRO_ICM45600_MAXDELAY;
-                list[i].fifoMaxEventCount = FIFO_SIZE_COMPUTE(FIFO_SIZE_ICM45600);
+                list[i].fifoMaxEventCount = BATCH_SIZE_ICM45600;
+            } else if (strcmp(gyro, "ICM53600") == 0) {
+                list[i].power = GYRO_ICM53600_POWER;
+                list[i].minDelay = GYRO_ICM53600_MINDELAY;
+                list[i].maxDelay = GYRO_ICM53600_MAXDELAY;
+                list[i].fifoMaxEventCount = BATCH_SIZE_ICM53600;
             }
         }
     }
